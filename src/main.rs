@@ -10,7 +10,7 @@ const DEFAULT_CENTREX: f32 = -0.75;
 const DEFAULT_CENTREY: f32 = 0.0;
 const DEFAULT_SCALEY: f32 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
-const DEFAULT_FILENAME: &str = "output.jpg";
+const DEFAULT_FILENAME: &str = "output.bmp";
 
 fn generate(options: &Options, out: &mut Vec<u32>) {
     println!("{}", options);
