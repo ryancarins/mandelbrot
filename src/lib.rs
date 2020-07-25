@@ -77,16 +77,16 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
                     let mut iter: u32 = 0;
 
                     let x0: f32 =
-                        startx + ix as f32 * dx * options.samples as f32 + iterx as f32 * dx;
+                        startx + (ix as f32 * options.samples as f32 + iterx as f32) * dx;
                     let y0: f32 =
-                        starty + iy as f32 * dy * options.samples as f32 + itery as f32 * dy;
+                        starty + (iy as f32 * options.samples as f32 + itery as f32) * dy;
                     let mut x: f32 = x0;
                     let mut y: f32 = y0;
 
                     while x * x + y * y < (2 * 2) as f32 && iter <= options.max_iter {
                         let xtemp: f32 = x * x - y * y + x0 as f32;
 
-                        y = 2 as f32 * x * y + y0 as f32;
+                        y = 2.0 * x * y + y0 as f32;
                         x = xtemp;
                         iter += 1;
                     }
