@@ -1,6 +1,7 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
+use std::time::{Instant};
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -15,7 +16,9 @@ const DEFAULT_PROGRESS: bool = false;
 
 fn generate(options: &Options, out: &mut Vec<u32>) {
     println!("{}", options);
+    let start = Instant::now();
     mandelbrot::mandelbrot(options, out);
+    println!("time taken: {}ms", start.elapsed().as_millis());
 }
 
 fn main() {
