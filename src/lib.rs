@@ -1,7 +1,7 @@
 //Struct for storing arguments
 pub struct Options {
-    pub max_width: u32,
-    pub max_height: u32,
+    pub max_width: usize,
+    pub max_height: usize,
     pub max_colours: u32,
     pub max_iter: u32,
 
@@ -15,7 +15,7 @@ pub struct Options {
 }
 
 impl Options {
-    pub fn new(max_width: u32, max_height: u32, max_colours: u32, max_iter: u32, width: u32, height: u32, centrex: f32, centrey: f32, scaley: f32, samples: u32) -> Options {
+    pub fn new(max_width: usize, max_height: usize, max_colours: u32, max_iter: u32, width: u32, height: u32, centrex: f32, centrey: f32, scaley: f32, samples: u32) -> Options {
         Options {
             max_width,
             max_height,

@@ -1,6 +1,17 @@
-use argparse::{ArgumentParser, Collect, Store};
+use argparse::{ArgumentParser, Store};
 use mandelbrot::Options;
 use std::process;
+
+const DEFAULT_MAX_WIDTH: usize = 1024;
+const DEFAULT_MAX_HEIGHT: usize = 1024;
+const DEFAULT_MAX_COLOURS: u32 = 256;
+const DEFAULT_WIDTH: u32 = 1024;
+const DEFAULT_HEIGHT: u32 = 1024;
+const DEFAULT_MAX_ITER: u32 = 256;
+const DEFAULT_CENTREX:f32 = -0.75;
+const DEFAULT_CENTREY:f32 = 0.0;
+const DEFAULT_SCALEY: f32 = 2.5;
+const DEFAULT_SAMPLES: u32 = 1;
 
 fn generate(iterations: u32, centrex: f32, centrey: f32, scaley: f32, width: u32, height: u32, scale :u32, out: &mut u32){
     println!("generating at ({}, {}) with scale {} and {} iterations at size {}x{} {} samples per pixel", centrex, centrey, scaley, iterations, width, height, scale);
@@ -8,41 +19,32 @@ fn generate(iterations: u32, centrex: f32, centrey: f32, scaley: f32, width: u32
 }
 
 fn main() {
-    let default_max_width = 4096;
-    let default_max_height = 4096;
-    let default_max_colours = 256;
-    let default_width = 1024;
-    let default_height = 1024;
-    let default_max_iter = 256;
-    let default_centrex:f32 = -0.75;
-    let default_centrey:f32 = 0.0;
-    let default_scaley: f32 = 2.5;
-    let default_samples = 1;
-
+    let buffer: [u32;DEFAULT_MAX_WIDTH*DEFAULT_MAX_HEIGHT];
 
     let mut options = Options::new(
-        default_max_width,
-        default_max_height,
-        default_max_colours,
-        default_max_iter,
-        default_width,
-        default_height,
-        default_centrex,
-        default_centrey,
-        default_scaley,
-        default_samples
+        DEFAULT_MAX_WIDTH,
+        DEFAULT_MAX_HEIGHT,
+        DEFAULT_MAX_COLOURS,
+        DEFAULT_MAX_ITER,
+        DEFAULT_WIDTH,
+        DEFAULT_HEIGHT,
+        DEFAULT_CENTREX,
+        DEFAULT_CENTREY,
+        DEFAULT_SCALEY,
+        DEFAULT_SAMPLES
     );
 
     //Handle command line arguments
     {
         //Using variables here because I wanted to format and parser takes a &str
-        let height_text = format!("Set height (default {})", default_height);
-        let width_text = format!("Set width (default {})", default_width);
-        let centrex_text = format!("Set centrex (default {})", default_centrex);
-        let centrey_text = format!("Set centrey (default {})", default_centrey);
-        let max_iter_text = format!("Set maximum number of iterations (default {})", default_max_iter);
-        let scaley_text = format!("Set scale(default {})", default_scaley);
-        let samples_text = format!("Set samples for supersampling(default {})", default_samples);
+        let height_text = format!("Set height (default {})", DEFAULT_HEIGHT);
+        let width_text = format!("Set width (default {})", DEFAULT_WIDTH);
+        let centrex_text = format!("Set centrex (default {})", DEFAULT_CENTREX);
+        let centrey_text = format!("Set centrey (default {})", DEFAULT_CENTREY);
+        let max_iter_text = format!("Set maximum number of iterations (default {})", DEFAULT_MAX_ITER);
+        let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
+        let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
+
 
         let mut parser = ArgumentParser::new();
         parser.set_description("Mandelbrot generator");
