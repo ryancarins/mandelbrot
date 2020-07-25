@@ -49,11 +49,12 @@ impl fmt::Display for Options {
             self.max_iter,
             self.width,
             self.height,
-            self.samples
+            self.samples * self.samples
         )
     }
 }
 
+#[inline]
 fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) -> u32 {
     let iter = (iter * options.max_colours / max_iter) & (options.max_colours - 1);
     return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
