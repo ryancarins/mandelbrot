@@ -8,18 +8,19 @@ const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
 const DEFAULT_HEIGHT: u32 = 1024;
 const DEFAULT_MAX_ITER: u32 = 256;
-const DEFAULT_CENTREX:f32 = -0.75;
-const DEFAULT_CENTREY:f32 = 0.0;
+const DEFAULT_CENTREX: f32 = -0.75;
+const DEFAULT_CENTREY: f32 = 0.0;
 const DEFAULT_SCALEY: f32 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
 
-fn generate(iterations: u32, centrex: f32, centrey: f32, scaley: f32, width: u32, height: u32, scale :u32, out: &mut u32){
-    println!("generating at ({}, {}) with scale {} and {} iterations at size {}x{} {} samples per pixel", centrex, centrey, scaley, iterations, width, height, scale);
-    //mandelbrot(iterations, centrex, centrey, scaley, width, height, scale, &out);
+fn generate(options: &Options, out: &mut Vec<u32>) {
+    println!("{}", options);
+    mandelbrot::mandelbrot(options, out);
 }
 
 fn main() {
-    let buffer: [u32;DEFAULT_MAX_WIDTH*DEFAULT_MAX_HEIGHT];
+    //let mut buffer: [u32;DEFAULT_MAX_WIDTH*DEFAULT_MAX_HEIGHT];
+    let mut buffer: Vec<u32> = vec![];
 
     let mut options = Options::new(
         DEFAULT_MAX_WIDTH,
@@ -31,7 +32,7 @@ fn main() {
         DEFAULT_CENTREX,
         DEFAULT_CENTREY,
         DEFAULT_SCALEY,
-        DEFAULT_SAMPLES
+        DEFAULT_SAMPLES,
     );
 
     //Handle command line arguments
@@ -41,10 +42,12 @@ fn main() {
         let width_text = format!("Set width (default {})", DEFAULT_WIDTH);
         let centrex_text = format!("Set centrex (default {})", DEFAULT_CENTREX);
         let centrey_text = format!("Set centrey (default {})", DEFAULT_CENTREY);
-        let max_iter_text = format!("Set maximum number of iterations (default {})", DEFAULT_MAX_ITER);
+        let max_iter_text = format!(
+            "Set maximum number of iterations (default {})",
+            DEFAULT_MAX_ITER
+        );
         let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
-
 
         let mut parser = ArgumentParser::new();
         parser.set_description("Mandelbrot generator");
@@ -72,5 +75,10 @@ fn main() {
             .refer(&mut options.samples)
             .add_option(&["--samples"], Store, &samples_text);
         parser.parse_args_or_exit();
+    }
+
+    generate(&options, &mut buffer);
+    for i in buffer {
+        println!("{}", i);
     }
 }
