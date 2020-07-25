@@ -1,9 +1,7 @@
 use argparse::{ArgumentParser, Store};
+use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
-use std::process;
 
-const DEFAULT_MAX_WIDTH: usize = 1024;
-const DEFAULT_MAX_HEIGHT: usize = 1024;
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
 const DEFAULT_HEIGHT: u32 = 1024;
@@ -12,6 +10,7 @@ const DEFAULT_CENTREX: f32 = -0.75;
 const DEFAULT_CENTREY: f32 = 0.0;
 const DEFAULT_SCALEY: f32 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
+const DEFAULT_FILENAME: &str = "output.jpg";
 
 fn generate(options: &Options, out: &mut Vec<u32>) {
     println!("{}", options);
@@ -19,12 +18,10 @@ fn generate(options: &Options, out: &mut Vec<u32>) {
 }
 
 fn main() {
-    //let mut buffer: [u32;DEFAULT_MAX_WIDTH*DEFAULT_MAX_HEIGHT];
     let mut buffer: Vec<u32> = vec![];
+    let mut filename = std::string::String::from(DEFAULT_FILENAME);
 
     let mut options = Options::new(
-        DEFAULT_MAX_WIDTH,
-        DEFAULT_MAX_HEIGHT,
         DEFAULT_MAX_COLOURS,
         DEFAULT_MAX_ITER,
         DEFAULT_WIDTH,
@@ -48,6 +45,10 @@ fn main() {
         );
         let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
+        let filename_text = format!(
+            "Set filename(default {}) supported formats are PNG, JPEG, BMP, and TIFF",
+            DEFAULT_FILENAME
+        );
 
         let mut parser = ArgumentParser::new();
         parser.set_description("Mandelbrot generator");
@@ -74,11 +75,28 @@ fn main() {
         parser
             .refer(&mut options.samples)
             .add_option(&["--samples"], Store, &samples_text);
+        parser
+            .refer(&mut filename)
+            .add_option(&["--name"], Store, &filename_text);
+
         parser.parse_args_or_exit();
     }
 
     generate(&options, &mut buffer);
-    for i in buffer {
-        println!("{}", i);
+
+    //Create a blank image to write to
+    let mut img: RgbImage = ImageBuffer::new(options.width, options.height);
+
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        //32 bit number but only storing rgb so split it into its 3 8 bit components
+        let r =
+            ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16) as u8;
+        let g =
+            ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8) as u8;
+        let b = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
+        *pixel = image::Rgb([r, g, b]);
     }
+    img.save(&filename).unwrap_or_else(|_| {
+        eprintln!("Error: Could not write file");
+    });
 }

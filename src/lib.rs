@@ -2,8 +2,6 @@ use std::fmt;
 
 //Struct for storing arguments
 pub struct Options {
-    pub max_width: usize,
-    pub max_height: usize,
     pub max_colours: u32,
     pub max_iter: u32,
 
@@ -18,8 +16,6 @@ pub struct Options {
 
 impl Options {
     pub fn new(
-        max_width: usize,
-        max_height: usize,
         max_colours: u32,
         max_iter: u32,
         width: u32,
@@ -30,8 +26,6 @@ impl Options {
         samples: u32,
     ) -> Options {
         Options {
-            max_width,
-            max_height,
             max_colours,
             max_iter,
             width,
@@ -60,10 +54,9 @@ impl fmt::Display for Options {
     }
 }
 
-#[inline]
 fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) -> u32 {
     let iter = (iter * options.max_colours / max_iter) & (options.max_colours - 1);
-    (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter
+    return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
 }
 
 pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
@@ -90,7 +83,7 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
                     let mut x: f32 = x0;
                     let mut y: f32 = y0;
 
-                    while x * x + y * y < 4 as f32 && iter <= options.max_iter {
+                    while x * x + y * y < (2 * 2) as f32 && iter <= options.max_iter {
                         let xtemp: f32 = x * x - y * y + x0 as f32;
 
                         y = 2 as f32 * x * y + y0 as f32;

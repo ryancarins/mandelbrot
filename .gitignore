@@ -1,1 +1,10 @@
 /target
+*.jpg
+*.jpeg
+*.gif
+*.png
+*.tiff
+*.tif
+*.bmp
+*.dib
+*.ico
