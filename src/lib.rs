@@ -12,6 +12,7 @@ pub struct Options {
     pub scaley: f32,
 
     pub samples: u32,
+    pub progress: bool,
 }
 
 impl Options {
@@ -24,6 +25,7 @@ impl Options {
         centrey: f32,
         scaley: f32,
         samples: u32,
+        progress: bool
     ) -> Options {
         Options {
             max_colours,
@@ -34,6 +36,7 @@ impl Options {
             centrey,
             scaley,
             samples,
+            progress
         }
     }
 }
@@ -62,6 +65,9 @@ fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) ->
 
 pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
     let scalex: f32 = options.scaley * options.width as f32 / options.height as f32;
+
+    let hundredth = options.width*options.height/100;
+    let mut progress_percentage = 0;
 
     let dx: f32 = scalex / options.width as f32 / options.samples as f32;
     let dy: f32 = options.scaley / options.height as f32 / options.samples as f32;
@@ -104,6 +110,10 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
                 options.max_iter,
                 7,
             ));
+            if options.progress && out.len() as u32 % hundredth == 0 {
+                progress_percentage+=1;
+                println!("{}% complete",progress_percentage);
+            }
         }
     }
 }

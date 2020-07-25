@@ -1,4 +1,4 @@
-use argparse::{ArgumentParser, Store};
+use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
 
@@ -11,6 +11,7 @@ const DEFAULT_CENTREY: f32 = 0.0;
 const DEFAULT_SCALEY: f32 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
+const DEFAULT_PROGRESS: bool = false;
 
 fn generate(options: &Options, out: &mut Vec<u32>) {
     println!("{}", options);
@@ -30,6 +31,7 @@ fn main() {
         DEFAULT_CENTREY,
         DEFAULT_SCALEY,
         DEFAULT_SAMPLES,
+        DEFAULT_PROGRESS,
     );
 
     //Handle command line arguments
@@ -39,6 +41,7 @@ fn main() {
         let width_text = format!("Set width (default {})", DEFAULT_WIDTH);
         let centrex_text = format!("Set centrex (default {})", DEFAULT_CENTREX);
         let centrey_text = format!("Set centrey (default {})", DEFAULT_CENTREY);
+        let progress_text = format!("Display progress (default off)");
         let max_iter_text = format!(
             "Set maximum number of iterations (default {})",
             DEFAULT_MAX_ITER
@@ -78,6 +81,9 @@ fn main() {
         parser
             .refer(&mut filename)
             .add_option(&["--name"], Store, &filename_text);
+        parser
+            .refer(&mut options.progress)
+            .add_option(&["-v"], StoreTrue, &progress_text);
 
         parser.parse_args_or_exit();
     }
