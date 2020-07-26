@@ -13,6 +13,7 @@ const DEFAULT_SCALEY: f32 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
 const DEFAULT_PROGRESS: bool = false;
+const DEFAULT_COLOUR_CODE: u32 = 7;
 
 fn generate(options: &Options, out: &mut Vec<u32>) {
     println!("{}", options);
@@ -35,6 +36,7 @@ fn main() {
         DEFAULT_SCALEY,
         DEFAULT_SAMPLES,
         DEFAULT_PROGRESS,
+        DEFAULT_COLOUR_CODE,
     );
 
     //Handle command line arguments
@@ -51,6 +53,7 @@ fn main() {
         );
         let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
+        let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
         let filename_text = format!(
             "Set filename(default {}) supported formats are PNG, JPEG, BMP, and TIFF",
             DEFAULT_FILENAME
@@ -81,6 +84,10 @@ fn main() {
         parser
             .refer(&mut options.samples)
             .add_option(&["--samples"], Store, &samples_text);
+        parser
+            .refer(&mut options.colour)
+            .add_option(&["--colour"], Store, &colour_text);
+
         parser
             .refer(&mut filename)
             .add_option(&["--name"], Store, &filename_text);

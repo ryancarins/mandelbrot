@@ -13,6 +13,7 @@ pub struct Options {
 
     pub samples: u32,
     pub progress: bool,
+    pub colour: u32,
 }
 
 impl Options {
@@ -25,7 +26,8 @@ impl Options {
         centrey: f32,
         scaley: f32,
         samples: u32,
-        progress: bool
+        progress: bool,
+        colour: u32
     ) -> Options {
         Options {
             max_colours,
@@ -36,7 +38,8 @@ impl Options {
             centrey,
             scaley,
             samples,
-            progress
+            progress,
+            colour
         }
     }
 }
@@ -45,14 +48,15 @@ impl fmt::Display for Options {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Position ({}, {}) with scale {} and {} iterations at size {}x{} {} samples per pixel",
+            "Position ({}, {}) with scale {} and {} iterations at size {}x{} {} samples per pixel and colour code {}",
             self.centrex,
             self.centrey,
             self.scaley,
             self.max_iter,
             self.width,
             self.height,
-            self.samples * self.samples
+            self.samples * self.samples,
+            self.colour
         )
     }
 }
@@ -108,7 +112,7 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
                 options,
                 totaliter / (options.samples * options.samples),
                 options.max_iter,
-                7,
+                options.colour,
             ));
             if options.progress && out.len() as u32 % hundredth == 0 {
                 progress_percentage+=1;
