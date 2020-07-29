@@ -1,7 +1,7 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
-use std::time::{Instant};
+use std::time::Instant;
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -23,7 +23,7 @@ fn generate(options: &Options, out: &mut Vec<u32>) {
 }
 
 fn main() {
-    let mut buffer: Vec<u32> = vec![];
+    let mut buffer: Vec<u32> = Vec::with_capacity((DEFAULT_WIDTH * DEFAULT_HEIGHT) as usize);
     let mut filename = std::string::String::from(DEFAULT_FILENAME);
 
     let mut options = Options::new(

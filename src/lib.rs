@@ -27,7 +27,7 @@ impl Options {
         scaley: f32,
         samples: u32,
         progress: bool,
-        colour: u32
+        colour: u32,
     ) -> Options {
         Options {
             max_colours,
@@ -39,7 +39,7 @@ impl Options {
             scaley,
             samples,
             progress,
-            colour
+            colour,
         }
     }
 }
@@ -70,7 +70,7 @@ fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) ->
 pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
     let scalex: f32 = options.scaley * options.width as f32 / options.height as f32;
 
-    let hundredth = options.width*options.height/100;
+    let hundredth = options.width * options.height / 100;
     let mut progress_percentage = 0;
 
     let dx: f32 = scalex / options.width as f32 / options.samples as f32;
@@ -87,10 +87,8 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
                 for iterx in 0..options.samples {
                     let mut iter: u32 = 0;
 
-                    let x0: f32 =
-                        startx + (ix as f32 * options.samples as f32 + iterx as f32) * dx;
-                    let y0: f32 =
-                        starty + (iy as f32 * options.samples as f32 + itery as f32) * dy;
+                    let x0: f32 = startx + (ix as f32 * options.samples as f32 + iterx as f32) * dx;
+                    let y0: f32 = starty + (iy as f32 * options.samples as f32 + itery as f32) * dy;
                     let mut x: f32 = x0;
                     let mut y: f32 = y0;
 
@@ -115,8 +113,8 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
                 options.colour,
             ));
             if options.progress && out.len() as u32 % hundredth == 0 {
-                progress_percentage+=1;
-                println!("{}% complete",progress_percentage);
+                progress_percentage += 1;
+                println!("{}% complete", progress_percentage);
             }
         }
     }
