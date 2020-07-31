@@ -16,7 +16,7 @@ pub struct Options {
     pub progress: bool,
     pub colour: u32,
     pub threads: u32,
-    pub threadid: Option<u32>,
+    pub thread_id: Option<u32>,
 }
 
 impl Options {
@@ -45,14 +45,16 @@ impl Options {
             progress,
             colour,
             threads,
-            threadid: None,
+            thread_id: None,
         }
     }
 
-    pub fn band(&mut self){
-        self.centrey = self.centrey + (self.threadid.unwrap() as f32 - (self.threads as f32 - 1.0) / 2.0) * (self.scaley / self.threads as f32);
-        self.scaley = self.scaley/self.threads as f32;
-        self.height = self.height/self.threads;
+    pub fn band(&mut self) {
+        self.centrey = self.centrey
+            + (self.thread_id.unwrap() as f32 - (self.threads as f32 - 1.0) / 2.0)
+                * (self.scaley / self.threads as f32);
+        self.scaley = self.scaley / self.threads as f32;
+        self.height = self.height / self.threads;
     }
 }
 

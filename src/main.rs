@@ -1,8 +1,8 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
-use std::time::Instant;
 use std::thread;
+use std::time::Instant;
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -23,11 +23,9 @@ fn generate(options: Options, out: &mut Vec<u32>) {
     let start = Instant::now();
     for i in 0..options.threads {
         let mut temp = options;
-        temp.threadid = Some(i);
+        temp.thread_id = Some(i);
         temp.band();
-        let handle = thread::spawn(move || {
-            mandelbrot::mandelbrot(temp)
-        });
+        let handle = thread::spawn(move || mandelbrot::mandelbrot(temp));
         handles.push(handle);
     }
 
@@ -70,7 +68,10 @@ fn main() {
         let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
         let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
-        let threads_text = format!("Set number of threads to use for processing(default {})", DEFAULT_THREADS);
+        let threads_text = format!(
+            "Set number of threads to use for processing(default {})",
+            DEFAULT_THREADS
+        );
         let filename_text = format!(
             "Set filename(default {}) supported formats are PNG, JPEG, BMP, and TIFF",
             DEFAULT_FILENAME
@@ -106,7 +107,7 @@ fn main() {
             .add_option(&["--colour"], Store, &colour_text);
         parser
             .refer(&mut options.threads)
-            .add_option(&["--threads","-j"], Store, &threads_text);
+            .add_option(&["--threads", "-j"], Store, &threads_text);
         parser
             .refer(&mut filename)
             .add_option(&["--name"], Store, &filename_text);
