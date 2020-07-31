@@ -2,6 +2,7 @@ use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
 use std::time::Instant;
+use std::thread;
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -11,14 +12,29 @@ const DEFAULT_CENTREX: f32 = -0.75;
 const DEFAULT_CENTREY: f32 = 0.0;
 const DEFAULT_SCALEY: f32 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
+const DEFAULT_THREADS: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
 const DEFAULT_PROGRESS: bool = false;
 const DEFAULT_COLOUR_CODE: u32 = 7;
 
-fn generate(options: &Options, out: &mut Vec<u32>) {
+fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
+    let mut handles = vec![];
     let start = Instant::now();
-    mandelbrot::mandelbrot(options, out);
+    for i in 0..options.threads {
+        let mut temp = options;
+        temp.threadid = Some(i);
+        temp.band();
+        let handle = thread::spawn(move || {
+            mandelbrot::mandelbrot(temp)
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles.into_iter() {
+        out.append(&mut handle.join().unwrap());
+    }
+    //mandelbrot::mandelbrot(options, out);
     println!("time taken: {}ms", start.elapsed().as_millis());
 }
 
@@ -36,6 +52,7 @@ fn main() {
         DEFAULT_SAMPLES,
         DEFAULT_PROGRESS,
         DEFAULT_COLOUR_CODE,
+        DEFAULT_THREADS,
     );
 
     //Handle command line arguments
@@ -53,6 +70,7 @@ fn main() {
         let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
         let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
+        let threads_text = format!("Set number of threads to use for processing(default {})", DEFAULT_THREADS);
         let filename_text = format!(
             "Set filename(default {}) supported formats are PNG, JPEG, BMP, and TIFF",
             DEFAULT_FILENAME
@@ -86,7 +104,9 @@ fn main() {
         parser
             .refer(&mut options.colour)
             .add_option(&["--colour"], Store, &colour_text);
-
+        parser
+            .refer(&mut options.threads)
+            .add_option(&["--threads","-j"], Store, &threads_text);
         parser
             .refer(&mut filename)
             .add_option(&["--name"], Store, &filename_text);
@@ -98,8 +118,8 @@ fn main() {
     }
 
     let mut buffer: Vec<u32> = Vec::with_capacity((options.width * options.height) as usize);
-    
-    generate(&options, &mut buffer);
+
+    generate(options, &mut buffer);
 
     //Create a blank image to write to
     let mut img: RgbImage = ImageBuffer::new(options.width, options.height);

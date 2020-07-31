@@ -1,6 +1,7 @@
 use std::fmt;
 
 //Struct for storing arguments
+#[derive(Copy, Clone, Debug)]
 pub struct Options {
     pub max_colours: u32,
     pub max_iter: u32,
@@ -14,6 +15,8 @@ pub struct Options {
     pub samples: u32,
     pub progress: bool,
     pub colour: u32,
+    pub threads: u32,
+    pub threadid: Option<u32>,
 }
 
 impl Options {
@@ -28,6 +31,7 @@ impl Options {
         samples: u32,
         progress: bool,
         colour: u32,
+        threads: u32,
     ) -> Options {
         Options {
             max_colours,
@@ -40,7 +44,15 @@ impl Options {
             samples,
             progress,
             colour,
+            threads,
+            threadid: None,
         }
+    }
+
+    pub fn band(&mut self){
+        self.centrey = self.centrey + (self.threadid.unwrap() as f32 - (self.threads as f32 - 1.0) / 2.0) * (self.scaley / self.threads as f32);
+        self.scaley = self.scaley/self.threads as f32;
+        self.height = self.height/self.threads;
     }
 }
 
@@ -67,7 +79,8 @@ fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) ->
     return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
 }
 
-pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
+pub fn mandelbrot(options: Options) -> Vec<u32> {
+    let mut out: Vec<u32> = vec![];
     let scalex: f32 = options.scaley * options.width as f32 / options.height as f32;
 
     let hundredth = options.width * options.height / 100;
@@ -107,7 +120,7 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
             }
 
             out.push(iterations2colour(
-                options,
+                &options,
                 totaliter / (options.samples * options.samples),
                 options.max_iter,
                 options.colour,
@@ -118,4 +131,5 @@ pub fn mandelbrot(options: &Options, out: &mut Vec<u32>) {
             }
         }
     }
+    out
 }
