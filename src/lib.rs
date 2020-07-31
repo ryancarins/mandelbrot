@@ -62,7 +62,7 @@ impl fmt::Display for Options {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Position ({}, {}) with scale {} and {} iterations at size {}x{} {} samples per pixel and colour code {}",
+            "Position ({}, {}) with scale {} and {} iterations at size {}x{} {} samples per pixel {} threads and colour code {}",
             self.centrex,
             self.centrey,
             self.scaley,
@@ -70,6 +70,7 @@ impl fmt::Display for Options {
             self.width,
             self.height,
             self.samples * self.samples,
+            self.threads,
             self.colour
         )
     }
