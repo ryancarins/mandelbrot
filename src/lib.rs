@@ -126,7 +126,7 @@ pub fn mandelbrot(options: Options) -> Vec<u32> {
                 &options,
                 totaliter / (options.samples * options.samples),
                 options.max_iter,
-                options.colour,
+                options.thread_id.unwrap() % 7 + 1,
             ));
             if options.progress && out.len() as u32 % hundredth == 0 {
                 progress_percentage += 1;

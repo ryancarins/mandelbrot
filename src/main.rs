@@ -127,11 +127,11 @@ fn main() {
 
     for (x, y, pixel) in img.enumerate_pixels_mut() {
         //32 bit number but only storing rgb so split it into its 3 8 bit components
-        let r =
+        let b =
             ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16) as u8;
         let g =
             ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8) as u8;
-        let b = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
+        let r = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
         *pixel = image::Rgb([r, g, b]);
     }
     img.save(&filename).unwrap_or_else(|_| {
