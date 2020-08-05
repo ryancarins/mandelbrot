@@ -16,6 +16,7 @@ const DEFAULT_THREADS: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
 const DEFAULT_PROGRESS: bool = false;
 const DEFAULT_COLOUR_CODE: u32 = 7;
+const DEFAULT_COLOURISE: bool = false;
 
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
@@ -50,6 +51,7 @@ fn main() {
         DEFAULT_SAMPLES,
         DEFAULT_PROGRESS,
         DEFAULT_COLOUR_CODE,
+        DEFAULT_COLOURISE,
         DEFAULT_THREADS,
     );
 
@@ -60,7 +62,8 @@ fn main() {
         let width_text = format!("Set width (default {})", DEFAULT_WIDTH);
         let centrex_text = format!("Set centrex (default {})", DEFAULT_CENTREX);
         let centrey_text = format!("Set centrey (default {})", DEFAULT_CENTREY);
-        let progress_text = format!("Display progress (default off)");
+        let progress_text = format!("Display progress (default {})",DEFAULT_PROGRESS);
+        let colourise_text = format!("Use a different colour for each thread (default {})",DEFAULT_COLOURISE);
         let max_iter_text = format!(
             "Set maximum number of iterations (default {})",
             DEFAULT_MAX_ITER
@@ -114,6 +117,9 @@ fn main() {
         parser
             .refer(&mut options.progress)
             .add_option(&["-v"], StoreTrue, &progress_text);
+        parser
+            .refer(&mut options.colourise)
+            .add_option(&["--colourise"], StoreTrue, &colourise_text);
 
         parser.parse_args_or_exit();
     }

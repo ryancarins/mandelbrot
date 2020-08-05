@@ -15,6 +15,7 @@ pub struct Options {
     pub samples: u32,
     pub progress: bool,
     pub colour: u32,
+    pub colourise: bool,
     pub threads: u32,
     pub thread_id: Option<u32>,
 }
@@ -31,6 +32,7 @@ impl Options {
         samples: u32,
         progress: bool,
         colour: u32,
+        colourise: bool,
         threads: u32,
     ) -> Options {
         Options {
@@ -44,6 +46,7 @@ impl Options {
             samples,
             progress,
             colour,
+            colourise,
             threads,
             thread_id: None,
         }
@@ -85,6 +88,13 @@ fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) ->
 pub fn mandelbrot(options: Options) -> Vec<u32> {
     let mut out: Vec<u32> = vec![];
     let scalex: f32 = options.scaley * options.width as f32 / options.height as f32;
+    let colour: u32;
+    if options.colourise {
+        colour = options.thread_id.unwrap() % 7 + 1;
+    }else{
+        colour = options.colour;
+    }
+
 
     let hundredth = options.width * options.height / 100;
     let mut progress_percentage = 0;
@@ -121,12 +131,11 @@ pub fn mandelbrot(options: Options) -> Vec<u32> {
                     }
                 }
             }
-
             out.push(iterations2colour(
                 &options,
                 totaliter / (options.samples * options.samples),
                 options.max_iter,
-                options.thread_id.unwrap() % 7 + 1,
+                colour,
             ));
             if options.progress && out.len() as u32 % hundredth == 0 {
                 progress_percentage += 1;
