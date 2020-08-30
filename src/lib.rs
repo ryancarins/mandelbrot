@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::mpsc::Sender;
 
 //Struct for storing arguments
 #[derive(Copy, Clone, Debug)]
@@ -85,7 +86,7 @@ fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) ->
     return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
 }
 
-pub fn mandelbrot(options: Options) -> Vec<u32> {
+pub fn mandelbrot(options: Options, sender: Sender<(u32,u32)>) {
     let mut out: Vec<u32> = vec![];
     let scalex: f32 = options.scaley * options.width as f32 / options.height as f32;
     let colour: u32;
@@ -131,17 +132,23 @@ pub fn mandelbrot(options: Options) -> Vec<u32> {
                     }
                 }
             }
-            out.push(iterations2colour(
+
+            sender.send((iy*options.width + ix, iterations2colour(
                 &options,
                 totaliter / (options.samples * options.samples),
                 options.max_iter,
                 colour,
-            ));
+            ))).unwrap();
+            /*out.push(iterations2colour(
+                &options,
+                totaliter / (options.samples * options.samples),
+                options.max_iter,
+                colour,
+            ));*/
             if options.progress && out.len() as u32 % hundredth == 0 {
                 progress_percentage += 1;
                 println!("{}% complete", progress_percentage);
             }
         }
     }
-    out
 }

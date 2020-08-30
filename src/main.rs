@@ -3,6 +3,7 @@ use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
 use std::thread;
 use std::time::Instant;
+use std::sync::mpsc;
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -20,19 +21,23 @@ const DEFAULT_COLOURISE: bool = false;
 
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
-    let mut handles = vec![];
     let start = Instant::now();
+
+    let (tx, rx) = mpsc::channel();
+
     for i in 0..options.threads {
+        let local_tx = mpsc::Sender::clone(&tx);
         let mut temp = options;
         temp.thread_id = Some(i);
         temp.band();
-        let handle = thread::spawn(move || mandelbrot::mandelbrot(temp));
-        handles.push(handle);
+        thread::spawn(move || mandelbrot::mandelbrot(temp, local_tx));
     }
 
-    for handle in handles.into_iter() {
-        out.append(&mut handle.join().unwrap());
+    for _ in 0..out.len(){
+        let (i,val) = rx.recv().unwrap();
+        out[i as usize] = val;
     }
+
     //mandelbrot::mandelbrot(options, out);
     println!("time taken: {}ms", start.elapsed().as_millis());
 }
@@ -124,8 +129,8 @@ fn main() {
         parser.parse_args_or_exit();
     }
 
-    let mut buffer: Vec<u32> = Vec::with_capacity((options.width * options.height) as usize);
-
+    let mut buffer = vec![0; ((options.width * options.height) as usize)];
+ 
     generate(options, &mut buffer);
 
     //Create a blank image to write to
@@ -140,6 +145,7 @@ fn main() {
         let r = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
         *pixel = image::Rgb([r, g, b]);
     }
+
     img.save(&filename).unwrap_or_else(|_| {
         eprintln!("Error: Could not write file");
     });
