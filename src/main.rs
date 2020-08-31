@@ -1,9 +1,10 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-use std::sync::mpsc;
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -15,26 +16,27 @@ const DEFAULT_SCALEY: f32 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
 const DEFAULT_THREADS: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
-const DEFAULT_PROGRESS: bool = false;
 const DEFAULT_COLOUR_CODE: u32 = 7;
 const DEFAULT_COLOURISE: bool = false;
 
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
     let start = Instant::now();
-
+    let current_line = Arc::new(Mutex::new(0));
     let (tx, rx) = mpsc::channel();
 
     for i in 0..options.threads {
+        let mut local_options = options;
+        local_options.thread_id = Some(i);
         let local_tx = mpsc::Sender::clone(&tx);
-        let mut temp = options;
-        temp.thread_id = Some(i);
-        temp.band();
-        thread::spawn(move || mandelbrot::mandelbrot(temp, local_tx));
+        let current_line_ref = Arc::clone(&current_line);
+        thread::spawn(move || mandelbrot::mandelbrot(local_options, local_tx, current_line_ref));
     }
 
-    for _ in 0..out.len(){
-        let (i,val) = rx.recv().unwrap();
+    //Drop tx because we only need it for cloning and if we don't drop it the loop below will never end
+    drop(tx);
+
+    for (i, val) in rx {
         out[i as usize] = val;
     }
 
@@ -54,7 +56,6 @@ fn main() {
         DEFAULT_CENTREY,
         DEFAULT_SCALEY,
         DEFAULT_SAMPLES,
-        DEFAULT_PROGRESS,
         DEFAULT_COLOUR_CODE,
         DEFAULT_COLOURISE,
         DEFAULT_THREADS,
@@ -67,8 +68,10 @@ fn main() {
         let width_text = format!("Set width (default {})", DEFAULT_WIDTH);
         let centrex_text = format!("Set centrex (default {})", DEFAULT_CENTREX);
         let centrey_text = format!("Set centrey (default {})", DEFAULT_CENTREY);
-        let progress_text = format!("Display progress (default {})",DEFAULT_PROGRESS);
-        let colourise_text = format!("Use a different colour for each thread (default {})",DEFAULT_COLOURISE);
+        let colourise_text = format!(
+            "Use a different colour for each thread (default {})",
+            DEFAULT_COLOURISE
+        );
         let max_iter_text = format!(
             "Set maximum number of iterations (default {})",
             DEFAULT_MAX_ITER
@@ -119,18 +122,17 @@ fn main() {
         parser
             .refer(&mut filename)
             .add_option(&["--name"], Store, &filename_text);
-        parser
-            .refer(&mut options.progress)
-            .add_option(&["-v"], StoreTrue, &progress_text);
-        parser
-            .refer(&mut options.colourise)
-            .add_option(&["--colourise"], StoreTrue, &colourise_text);
+        parser.refer(&mut options.colourise).add_option(
+            &["--colourise"],
+            StoreTrue,
+            &colourise_text,
+        );
 
         parser.parse_args_or_exit();
     }
 
-    let mut buffer = vec![0; ((options.width * options.height) as usize)];
- 
+    let mut buffer = vec![0; (options.width * options.height) as usize];
+
     generate(options, &mut buffer);
 
     //Create a blank image to write to
