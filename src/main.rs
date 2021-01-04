@@ -1,6 +1,7 @@
 use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
+use pbr::ProgressBar;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -18,6 +19,7 @@ const DEFAULT_THREADS: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
 const DEFAULT_COLOUR_CODE: u32 = 7;
 const DEFAULT_COLOURISE: bool = false;
+const DEFAULT_PROGRESS: bool = false;
 
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
@@ -36,9 +38,23 @@ fn generate(options: Options, out: &mut Vec<u32>) {
     //Drop tx because we only need it for cloning and if we don't drop it the loop below will never end
     drop(tx);
 
+    let mut pb = ProgressBar::new(100);
+    pb.show_bar = options.progress;
+    pb.show_counter = options.progress;
+    pb.show_message = options.progress;
+    pb.show_percent = options.progress;
+    pb.show_speed = false;
+    pb.show_time_left = false;
+    pb.show_tick = false;
+    let mut pos = 0;
     for (i, val) in rx {
+        pos += 1;
+        if pos % (options.width * options.height / 100) == 0 {
+            pb.inc();
+        }
         out[i as usize] = val;
     }
+    pb.finish_print("done");
 
     //mandelbrot::mandelbrot(options, out);
     println!("time taken: {}ms", start.elapsed().as_millis());
@@ -59,6 +75,7 @@ fn main() {
         DEFAULT_COLOUR_CODE,
         DEFAULT_COLOURISE,
         DEFAULT_THREADS,
+        DEFAULT_PROGRESS,
     );
 
     //Handle command line arguments
@@ -79,6 +96,7 @@ fn main() {
         let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
         let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
+        let progress_text = format!("Display progress bar (default {})", DEFAULT_PROGRESS);
         let threads_text = format!(
             "Set number of threads to use for processing(default {})",
             DEFAULT_THREADS
@@ -127,6 +145,9 @@ fn main() {
             StoreTrue,
             &colourise_text,
         );
+        parser
+            .refer(&mut options.progress)
+            .add_option(&["--progress"], StoreTrue, &progress_text);
 
         parser.parse_args_or_exit();
     }

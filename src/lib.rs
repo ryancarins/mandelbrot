@@ -19,6 +19,7 @@ pub struct Options {
     pub colourise: bool,
     pub threads: u32,
     pub thread_id: Option<u32>,
+    pub progress: bool,
 }
 
 impl Options {
@@ -34,6 +35,7 @@ impl Options {
         colour: u32,
         colourise: bool,
         threads: u32,
+        progress: bool,
     ) -> Options {
         Options {
             max_colours,
@@ -48,6 +50,7 @@ impl Options {
             colourise,
             threads,
             thread_id: None,
+            progress,
         }
     }
 }
@@ -111,9 +114,9 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
                     let y0: f32 = starty + (iy as f32 * options.samples as f32 + itery as f32) * dy;
                     let mut x: f32 = x0;
                     let mut y: f32 = y0;
-
+                    let mut xtemp: f32;
                     while x * x + y * y < (2 * 2) as f32 && iter <= options.max_iter {
-                        let xtemp: f32 = x * x - y * y + x0 as f32;
+                        xtemp = x * x - y * y + x0 as f32;
 
                         y = 2.0 * x * y + y0 as f32;
                         x = xtemp;
