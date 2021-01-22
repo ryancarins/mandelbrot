@@ -1,7 +1,7 @@
+use ocl::ProQue;
 use std::fmt;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use ocl::ProQue;
 
 //Struct for storing arguments
 #[derive(Copy, Clone, Debug)]
@@ -206,24 +206,27 @@ __kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, 
 
     let pro_que = ProQue::builder()
         .src(src)
-        .dims((options.width,options.height))
+        .dims((options.width, options.height))
         .build()?;
 
     let buffer = pro_que.create_buffer::<u32>()?;
 
-    let kernel = pro_que.kernel_builder("mandelbrot")
+    let kernel = pro_que
+        .kernel_builder("mandelbrot")
         .arg(options.max_iter)
-	.arg(options.centrex)
-	.arg(options.centrey)
-	.arg(options.scaley)
-	.arg(options.samples)
+        .arg(options.centrex)
+        .arg(options.centrey)
+        .arg(options.scaley)
+        .arg(options.samples)
         .arg(&buffer)
         .build()?;
 
-    unsafe { kernel.enq()?; }
+    unsafe {
+        kernel.enq()?;
+    }
 
     buffer.read(vec).enq()?;
 
     //println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
     Ok(())
-}   
+}

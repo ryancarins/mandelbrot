@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
-
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
 const DEFAULT_HEIGHT: u32 = 1024;
@@ -26,15 +25,17 @@ const DEFAULT_OCL: bool = false;
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
     let start = Instant::now();
-    
+
     //Run the opencl version and return
     if options.ocl {
-        println!("Running opencl version threads flag will be ignored and no progress bar can be shown");
+        println!(
+            "Running opencl version threads flag will be ignored and no progress bar can be shown"
+        );
         mandelbrot::opencl_mandelbrot(options, out).expect("Failed to generate image with opencl");
         println!("time taken: {}ms", start.elapsed().as_millis());
-        return
+        return;
     }
-    
+
     let current_line = Arc::new(Mutex::new(0));
     let (tx, rx) = mpsc::channel();
 
@@ -188,5 +189,3 @@ fn main() {
         eprintln!("Error: Could not write file");
     });
 }
-
-
