@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
+
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
 const DEFAULT_HEIGHT: u32 = 1024;
@@ -20,10 +21,20 @@ const DEFAULT_FILENAME: &str = "output.bmp";
 const DEFAULT_COLOUR_CODE: u32 = 7;
 const DEFAULT_COLOURISE: bool = false;
 const DEFAULT_PROGRESS: bool = false;
+const DEFAULT_OCL: bool = false;
 
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
     let start = Instant::now();
+    
+    //Run the opencl version and return
+    if options.ocl {
+        println!("Running opencl version threads flag will be ignored and no progress bar can be shown");
+        mandelbrot::opencl_mandelbrot(options, out).expect("Failed to generate image with opencl");
+        println!("time taken: {}ms", start.elapsed().as_millis());
+        return
+    }
+    
     let current_line = Arc::new(Mutex::new(0));
     let (tx, rx) = mpsc::channel();
 
@@ -76,6 +87,7 @@ fn main() {
         DEFAULT_COLOURISE,
         DEFAULT_THREADS,
         DEFAULT_PROGRESS,
+        DEFAULT_OCL,
     );
 
     //Handle command line arguments
@@ -97,6 +109,7 @@ fn main() {
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
         let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
         let progress_text = format!("Display progress bar (default {})", DEFAULT_PROGRESS);
+        let ocl_text = format!("Use opencl instead of cpu)(default {})", DEFAULT_OCL);
         let threads_text = format!(
             "Set number of threads to use for processing(default {})",
             DEFAULT_THREADS
@@ -148,6 +161,9 @@ fn main() {
         parser
             .refer(&mut options.progress)
             .add_option(&["--progress"], StoreTrue, &progress_text);
+        parser
+            .refer(&mut options.ocl)
+            .add_option(&["--ocl"], StoreTrue, &ocl_text);
 
         parser.parse_args_or_exit();
     }
@@ -155,7 +171,6 @@ fn main() {
     let mut buffer = vec![0; (options.width * options.height) as usize];
 
     generate(options, &mut buffer);
-
     //Create a blank image to write to
     let mut img: RgbImage = ImageBuffer::new(options.width, options.height);
 
@@ -173,3 +188,5 @@ fn main() {
         eprintln!("Error: Could not write file");
     });
 }
+
+
