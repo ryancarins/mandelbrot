@@ -159,7 +159,7 @@ inline unsigned int iterations2colour(unsigned int iter, unsigned int max_iter, 
 	return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
 }
 
-__kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, float scaley, unsigned int samples, __global unsigned int* out)
+__kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, float scaley, unsigned int samples, unsigned int colour, __global unsigned int* out)
 {
 	unsigned int width = get_global_size(1);
 	unsigned int height = get_global_size(0);
@@ -201,7 +201,7 @@ __kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, 
 		}
 	}
 
-	out[iy * width + ix] = iterations2colour(totalCalc / (samples * samples), iterations, 7);
+	out[iy * width + ix] = iterations2colour(totalCalc / (samples * samples), iterations, colour);
 }"#;
 
     let pro_que = ProQue::builder()
@@ -218,6 +218,7 @@ __kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, 
         .arg(options.centrey)
         .arg(options.scaley)
         .arg(options.samples)
+        .arg(options.colour)
         .arg(&buffer)
         .build()?;
 
