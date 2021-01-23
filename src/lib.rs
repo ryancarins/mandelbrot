@@ -11,9 +11,9 @@ pub struct Options {
 
     pub width: u32,
     pub height: u32,
-    pub centrex: f32,
-    pub centrey: f32,
-    pub scaley: f32,
+    pub centrex: f64,
+    pub centrey: f64,
+    pub scaley: f64,
 
     pub samples: u32,
     pub colour: u32,
@@ -30,9 +30,9 @@ impl Options {
         max_iter: u32,
         width: u32,
         height: u32,
-        centrex: f32,
-        centrey: f32,
-        scaley: f32,
+        centrex: f64,
+        centrey: f64,
+        scaley: f64,
         samples: u32,
         colour: u32,
         colourise: bool,
@@ -91,7 +91,7 @@ fn interlocked_increment(shared: Arc<Mutex<u32>>) -> u32 {
 }
 
 pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Arc<Mutex<u32>>) {
-    let scalex: f32 = options.scaley * options.width as f32 / options.height as f32;
+    let scalex: f64 = options.scaley * options.width as f64 / options.height as f64;
     let colour: u32;
     if options.colourise {
         colour = options.thread_id.unwrap() % 7 + 1;
@@ -99,8 +99,8 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
         colour = options.colour;
     }
 
-    let dx: f32 = scalex / options.width as f32 / options.samples as f32;
-    let dy: f32 = options.scaley / options.height as f32 / options.samples as f32;
+    let dx: f64 = scalex / options.width as f64 / options.samples as f64;
+    let dy: f64 = options.scaley / options.height as f64 / options.samples as f64;
 
     let startx = options.centrex - scalex * 0.5;
     let starty = options.centrey - options.scaley * 0.5;
@@ -114,15 +114,15 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
                 for iterx in 0..options.samples {
                     let mut iter: u32 = 0;
 
-                    let x0: f32 = startx + (ix as f32 * options.samples as f32 + iterx as f32) * dx;
-                    let y0: f32 = starty + (iy as f32 * options.samples as f32 + itery as f32) * dy;
-                    let mut x: f32 = x0;
-                    let mut y: f32 = y0;
-                    let mut xtemp: f32;
-                    while x * x + y * y < (2 * 2) as f32 && iter <= options.max_iter {
-                        xtemp = x * x - y * y + x0 as f32;
+                    let x0: f64 = startx + (ix as f64 * options.samples as f64 + iterx as f64) * dx;
+                    let y0: f64 = starty + (iy as f64 * options.samples as f64 + itery as f64) * dy;
+                    let mut x: f64 = x0;
+                    let mut y: f64 = y0;
+                    let mut xtemp: f64;
+                    while x * x + y * y < (2 * 2) as f64 && iter <= options.max_iter {
+                        xtemp = x * x - y * y + x0 as f64;
 
-                        y = 2.0 * x * y + y0 as f32;
+                        y = 2.0 * x * y + y0 as f64;
                         x = xtemp;
                         iter += 1;
                     }
@@ -151,6 +151,7 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
 
 pub fn opencl_mandelbrot(options: Options, vec: &mut Vec<u32>) -> ocl::Result<()> {
     let src = r#"#define MAX_COLOURS 256
+    #pragma OPENCL EXTENSION cl_khr_fp64 : enable //Enable doubles for some extra precesion
 
 inline unsigned int iterations2colour(unsigned int iter, unsigned int max_iter, unsigned int flags)
 {
@@ -159,18 +160,18 @@ inline unsigned int iterations2colour(unsigned int iter, unsigned int max_iter, 
 	return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
 }
 
-__kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, float scaley, unsigned int samples, unsigned int colour, __global unsigned int* out)
+__kernel void mandelbrot(unsigned int iterations, double centrex, double centrey, double scaley, unsigned int samples, unsigned int colour, __global unsigned int* out)
 {
 	unsigned int width = get_global_size(1);
 	unsigned int height = get_global_size(0);
 
-	float scalex = scaley * width / height;
+	double scalex = scaley * width / height;
 
-	float dx = scalex / width / samples;
-	float dy = scaley / height / samples;
+	double dx = scalex / width / samples;
+	double dy = scaley / height / samples;
 
-	float startx = centrex - scalex * 0.5f;
-	float starty = centrey - scaley * 0.5f;
+	double startx = centrex - scalex * 0.5f;
+	double starty = centrey - scaley * 0.5f;
 
 	unsigned int ix = get_global_id(1);
 	unsigned int iy = get_global_id(0);
@@ -182,15 +183,15 @@ __kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, 
 		{
 			unsigned int iter = 0;
 
-			float x0 = startx + (ix * samples + aax) * dx;
-			float y0 = starty + (iy * samples + aay) * dy;
+			double x0 = startx + (ix * samples + aax) * dx;
+			double y0 = starty + (iy * samples + aay) * dy;
 
-			float x = x0;
-			float y = y0;
+			double x = x0;
+			double y = y0;
 
 			while (x * x + y * y < (2 * 2) && iter <= iterations)
 			{
-				float xtemp = x * x - y * y + x0;
+				double xtemp = x * x - y * y + x0;
 
 				y = 2 * x * y + y0;
 				x = xtemp;
