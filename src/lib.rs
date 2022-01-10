@@ -1,9 +1,10 @@
 use std::fmt;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
+use argparse::{ArgumentParser, Store, StoreTrue};
 
 //Struct for storing arguments
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Options {
     pub max_colours: u32,
     pub max_iter: u32,
@@ -19,38 +20,25 @@ pub struct Options {
     pub colourise: bool,
     pub threads: u32,
     pub thread_id: Option<u32>,
-    pub progress: bool,
+    pub file_name: String,
 }
 
-impl Options {
-    pub fn new(
-        max_colours: u32,
-        max_iter: u32,
-        width: u32,
-        height: u32,
-        centrex: f32,
-        centrey: f32,
-        scaley: f32,
-        samples: u32,
-        colour: u32,
-        colourise: bool,
-        threads: u32,
-        progress: bool,
-    ) -> Options {
+impl Default for Options {
+    fn default() -> Options {
         Options {
-            max_colours,
-            max_iter,
-            width,
-            height,
-            centrex,
-            centrey,
-            scaley,
-            samples,
-            colour,
-            colourise,
-            threads,
+            max_colours: 256,
+            max_iter: 256,
+            width: 1024,
+            height: 1024,
+            centrex: -0.75,
+            centrey: 0.0,
+            scaley: 2.5,
+            samples: 1,
+            colour: 7,
+            colourise: false,
+            threads: 1,
             thread_id: None,
-            progress,
+            file_name: String::from("output.bmp"),
         }
     }
 }
@@ -143,4 +131,75 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
         }
         iy = interlocked_increment(current_line.clone());
     }
+}
+
+pub fn parse_cli() -> Options {
+    let mut options = Options::default();
+    {
+    //Using variables here because I wanted to format and parser takes a &str
+    let height_text = format!("Set height (default {})", options.height);
+    let width_text = format!("Set width (default {})", options.width);
+    let centrex_text = format!("Set centrex (default {})", options.centrex);
+    let centrey_text = format!("Set centrey (default {})", options.centrey);
+    let colourise_text = format!(
+        "Use a different colour for each thread (default {})",
+        options.colourise
+    );
+    let max_iter_text = format!(
+        "Set maximum number of iterations (default {})",
+        options.max_iter
+    );
+    let scaley_text = format!("Set scale(default {})", options.scaley);
+    let samples_text = format!("Set samples for supersampling(default {})", options.samples);
+    let colour_text = format!("Set colour for image(default {})", options.colour);
+    let threads_text = format!(
+        "Set number of threads to use for processing(default {})",
+        options.threads
+    );
+    let filename_text = format!(
+        "Set filename(default {}) supported formats are PNG, JPEG, BMP, and TIFF",
+        options.file_name
+    );
+
+    let mut parser = ArgumentParser::new();
+    parser.set_description("Mandelbrot generator");
+    parser
+        .refer(&mut options.width)
+        .add_option(&["-w", "--width"], Store, &width_text);
+
+    parser
+        .refer(&mut options.height)
+        .add_option(&["-h", "--height"], Store, &height_text);
+
+    parser
+        .refer(&mut options.centrex)
+        .add_option(&["--centrex"], Store, &centrex_text);
+    parser
+        .refer(&mut options.centrey)
+        .add_option(&["--centrey"], Store, &centrey_text);
+    parser
+        .refer(&mut options.max_iter)
+        .add_option(&["--iterations"], Store, &max_iter_text);
+    parser
+        .refer(&mut options.scaley)
+        .add_option(&["--scale"], Store, &scaley_text);
+    parser
+        .refer(&mut options.samples)
+        .add_option(&["--samples"], Store, &samples_text);
+    parser
+        .refer(&mut options.colour)
+        .add_option(&["--colour"], Store, &colour_text);
+    parser
+        .refer(&mut options.threads)
+        .add_option(&["--threads", "-j"], Store, &threads_text);
+    parser
+        .refer(&mut options.file_name)
+        .add_option(&["--name"], Store, &filename_text);
+    parser
+        .refer(&mut options.colourise)
+        .add_option(&["--colourise"], StoreTrue, &colourise_text);
+    parser.parse_args_or_exit();
+    }
+
+    options
 }
