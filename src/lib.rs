@@ -61,12 +61,15 @@ impl fmt::Display for Options {
     }
 }
 
-#[inline]
+#[inline(always)]
 fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) -> u32 {
     let iter = (iter * options.max_colours / max_iter) & (options.max_colours - 1);
     return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
 }
 
+
+///Increments a counter wrapped in a mutex to mimick windows behaviour from my multicore
+///architechture course
 fn interlocked_increment(shared: Arc<Mutex<u32>>) -> u32 {
     let mut current = shared.lock().unwrap();
     let temp = *current;
@@ -117,6 +120,7 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
                 }
             }
 
+            //Send back the colour of the pixel and it's location to be added to memory
             sender
                 .send((
                     iy * options.width + ix,

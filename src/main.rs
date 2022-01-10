@@ -43,15 +43,13 @@ fn main() {
 
     for (x, y, pixel) in img.enumerate_pixels_mut() {
         //32 bit number but only storing rgb so split it into its 3 8 bit components
-        let b =
-            ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16) as u8;
-        let g =
-            ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8) as u8;
         let r = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
+        let g = ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8) as u8;
+        let b = ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16) as u8;
         *pixel = image::Rgb([r, g, b]);
     }
 
-    img.save(&options.file_name).unwrap_or_else(|_| {
-        eprintln!("Error: Could not write file");
+    img.save(&options.file_name).unwrap_or_else(|err| {
+        eprintln!("Error: Could not write file. Error: {}", err);
     });
 }
