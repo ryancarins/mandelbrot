@@ -1,0 +1,2 @@
+./target/release/mandelbrot -w 4096 -h 4096 --iterations 2048 --centrex -0.746 --centrey -0.1 --scale 0.001 -j 12 --name /mnt/d/Desktop/brot.jpg
+
