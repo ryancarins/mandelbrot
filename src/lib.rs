@@ -22,6 +22,7 @@ pub struct Options {
     pub thread_id: Option<u32>,
     pub progress: bool,
     pub ocl: bool,
+    pub service: bool,
 }
 
 impl Options {
@@ -39,6 +40,7 @@ impl Options {
         threads: u32,
         progress: bool,
         ocl: bool,
+        service: bool,
     ) -> Options {
         Options {
             max_colours,
@@ -55,6 +57,7 @@ impl Options {
             thread_id: None,
             progress,
             ocl,
+            service,
         }
     }
 }

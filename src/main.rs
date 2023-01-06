@@ -1,11 +1,16 @@
+#[macro_use]
+extern crate rocket;
 use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
 use pbr::ProgressBar;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::path::Path;
 use std::thread;
 use std::time::Instant;
+use rocket::fs::{FileServer, relative};
+use image::EncodableLayout;
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -21,6 +26,7 @@ const DEFAULT_COLOUR_CODE: u32 = 7;
 const DEFAULT_COLOURISE: bool = false;
 const DEFAULT_PROGRESS: bool = false;
 const DEFAULT_OCL: bool = false;
+const DEFAULT_SERVICE: bool = false;
 
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
@@ -72,7 +78,63 @@ fn generate(options: Options, out: &mut Vec<u32>) {
     println!("time taken: {}ms", start.elapsed().as_millis());
 }
 
-fn main() {
+#[get("/?<max_colours>&<max_iter>&<width>&<height>&<threads>&<ocl>&<samples>&<scale>")]
+fn mandelbrot_rest(
+    max_colours: Option<u32>,
+    max_iter: Option<u32>,
+    width: Option<u32>,
+    height: Option<u32>,
+    threads: Option<u32>,
+    ocl: Option<bool>,
+    samples: Option<u32>,
+    scale: Option<f32>
+) -> String {
+    let options = Options::new(
+        max_colours.unwrap_or(DEFAULT_MAX_COLOURS),
+        max_iter.unwrap_or(DEFAULT_MAX_ITER),
+        width.unwrap_or(DEFAULT_WIDTH),
+        height.unwrap_or(DEFAULT_HEIGHT),
+        DEFAULT_CENTREX,
+        DEFAULT_CENTREY,
+        scale.unwrap_or(DEFAULT_SCALEY),
+        samples.unwrap_or(DEFAULT_SAMPLES),
+        DEFAULT_COLOUR_CODE,
+        DEFAULT_COLOURISE,
+        threads.unwrap_or(DEFAULT_THREADS),
+        DEFAULT_PROGRESS,
+        ocl.unwrap_or(DEFAULT_OCL),
+        true,
+    );
+
+
+    let filename = format!("images/{}-{}-{}-{}-{}-{}-{}-{}-{}-{}.png",options.width,options.height,options.max_iter,options.max_colours, options.centrex, options.centrey,options.scaley,options.samples,options.colour,options.colourise);
+
+    if Path::new(&filename).exists() {
+        return filename;
+    }
+
+    let mut buffer = vec![0; (options.width * options.height) as usize];
+    generate(options, &mut buffer);
+    let mut img: RgbImage = ImageBuffer::new(options.width, options.height);
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        //32 bit number but only storing rgb so split it into its 3 8 bit components
+        let b = ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16)
+            as u8;
+        let g = ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8)
+            as u8;
+        let r = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
+        *pixel = image::Rgb([r, g, b]);
+    }
+
+    img.save(&filename).unwrap_or_else(|_| {
+        eprintln!("Error: Could not write file");
+    });
+
+    return filename;
+}
+
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
     let mut filename = std::string::String::from(DEFAULT_FILENAME);
 
     let mut options = Options::new(
@@ -89,6 +151,7 @@ fn main() {
         DEFAULT_THREADS,
         DEFAULT_PROGRESS,
         DEFAULT_OCL,
+        DEFAULT_SERVICE,
     );
 
     //Handle command line arguments
@@ -110,7 +173,8 @@ fn main() {
         let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
         let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
         let progress_text = format!("Display progress bar (default {})", DEFAULT_PROGRESS);
-        let ocl_text = format!("Use opencl instead of cpu)(default {})", DEFAULT_OCL);
+        let ocl_text = format!("Use opencl instead of cpu (default {})", DEFAULT_OCL);
+        let service_text = format!("Run as a REST service (default {})", DEFAULT_OCL);
         let threads_text = format!(
             "Set number of threads to use for processing(default {})",
             DEFAULT_THREADS
@@ -166,26 +230,38 @@ fn main() {
             .refer(&mut options.ocl)
             .add_option(&["--ocl"], StoreTrue, &ocl_text);
 
+        parser
+            .refer(&mut options.service)
+            .add_option(&["--service"], StoreTrue, &service_text);
+
         parser.parse_args_or_exit();
     }
 
-    let mut buffer = vec![0; (options.width * options.height) as usize];
+    if options.service {
+        let _rocket = rocket::build()
+            .mount("/", routes![mandelbrot_rest])
+            .mount("/images", FileServer::from(relative!("images")))
+            .launch().await?;
+    } else {
+        let mut buffer = vec![0; (options.width * options.height) as usize];
 
-    generate(options, &mut buffer);
-    //Create a blank image to write to
-    let mut img: RgbImage = ImageBuffer::new(options.width, options.height);
+        generate(options, &mut buffer);
+        //Create a blank image to write to
+        let mut img: RgbImage = ImageBuffer::new(options.width, options.height);
 
-    for (x, y, pixel) in img.enumerate_pixels_mut() {
-        //32 bit number but only storing rgb so split it into its 3 8 bit components
-        let b =
-            ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16) as u8;
-        let g =
-            ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8) as u8;
-        let r = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
-        *pixel = image::Rgb([r, g, b]);
+        for (x, y, pixel) in img.enumerate_pixels_mut() {
+            //32 bit number but only storing rgb so split it into its 3 8 bit components
+            let b = ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16)
+                as u8;
+            let g = ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8)
+                as u8;
+            let r = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
+            *pixel = image::Rgb([r, g, b]);
+        }
+
+        img.save(&filename).unwrap_or_else(|_| {
+            eprintln!("Error: Could not write file");
+        });
     }
-
-    img.save(&filename).unwrap_or_else(|_| {
-        eprintln!("Error: Could not write file");
-    });
+    return Ok(());
 }
