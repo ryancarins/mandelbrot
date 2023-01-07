@@ -10,7 +10,9 @@ use std::path::Path;
 use std::thread;
 use std::time::Instant;
 use rocket::fs::{FileServer, relative};
-use image::EncodableLayout;
+use rocket::http::Header;
+use rocket::{Request, Response};
+use rocket::fairing::{Fairing, Info, Kind};
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -27,6 +29,26 @@ const DEFAULT_COLOURISE: bool = false;
 const DEFAULT_PROGRESS: bool = false;
 const DEFAULT_OCL: bool = false;
 const DEFAULT_SERVICE: bool = false;
+
+
+pub struct CORS;
+
+#[rocket::async_trait]
+impl Fairing for CORS {
+    fn info(&self) -> Info {
+        Info {
+            name: "Attaching CORS headers to responses",
+            kind: Kind::Response
+        }
+    }
+
+    async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
+        response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
+        response.set_header(Header::new("Access-Control-Allow-Methods", "POST, GET, PATCH, OPTIONS"));
+        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
+        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
+    }
+}
 
 fn generate(options: Options, out: &mut Vec<u32>) {
     println!("{}", options);
@@ -78,28 +100,30 @@ fn generate(options: Options, out: &mut Vec<u32>) {
     println!("time taken: {}ms", start.elapsed().as_millis());
 }
 
-#[get("/?<max_colours>&<max_iter>&<width>&<height>&<threads>&<ocl>&<samples>&<scale>")]
+#[get("/?<max_iter>&<width>&<height>&<threads>&<ocl>&<samples>&<scale>&<x>&<y>&<colourise>")]
 fn mandelbrot_rest(
-    max_colours: Option<u32>,
     max_iter: Option<u32>,
     width: Option<u32>,
     height: Option<u32>,
     threads: Option<u32>,
     ocl: Option<bool>,
+    colourise: Option<bool>,
     samples: Option<u32>,
-    scale: Option<f32>
+    scale: Option<f32>,
+    x: Option<f32>,
+    y: Option<f32>
 ) -> String {
     let options = Options::new(
-        max_colours.unwrap_or(DEFAULT_MAX_COLOURS),
+        DEFAULT_MAX_COLOURS,
         max_iter.unwrap_or(DEFAULT_MAX_ITER),
         width.unwrap_or(DEFAULT_WIDTH),
         height.unwrap_or(DEFAULT_HEIGHT),
-        DEFAULT_CENTREX,
-        DEFAULT_CENTREY,
+        x.unwrap_or(DEFAULT_CENTREX),
+        y.unwrap_or(DEFAULT_CENTREY),
         scale.unwrap_or(DEFAULT_SCALEY),
         samples.unwrap_or(DEFAULT_SAMPLES),
         DEFAULT_COLOUR_CODE,
-        DEFAULT_COLOURISE,
+        colourise.unwrap_or(DEFAULT_COLOURISE),
         threads.unwrap_or(DEFAULT_THREADS),
         DEFAULT_PROGRESS,
         ocl.unwrap_or(DEFAULT_OCL),
@@ -238,9 +262,11 @@ async fn main() -> Result<(), rocket::Error> {
     }
 
     if options.service {
+        let file_options = rocket::fs::Options::Index;
         let _rocket = rocket::build()
+            .attach(CORS)
             .mount("/", routes![mandelbrot_rest])
-            .mount("/images", FileServer::from(relative!("images")))
+            .mount("/images", FileServer::new(relative!("images"), file_options))
             .launch().await?;
     } else {
         let mut buffer = vec![0; (options.width * options.height) as usize];
