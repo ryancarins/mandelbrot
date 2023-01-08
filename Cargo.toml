@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 argparse = "0.2.2"
-image = "0.23"
+image = "0.24"
 pbr = "1.0.3"
-ocl = "0.19.3"
+ocl = "0.19.4"
 rocket = "0.5.0-rc.2"
 base64 = "0.20.0"
