@@ -28,7 +28,7 @@ const DEFAULT_COLOUR_CODE: u32 = 7;
 const DEFAULT_COLOURISE: bool = false;
 const DEFAULT_PROGRESS: bool = false;
 const DEFAULT_OCL: bool = false;
-const DEFAULT_VULKAN: bool = true;
+const DEFAULT_VULKAN: bool = false;
 const DEFAULT_SERVICE: bool = false;
 
 
@@ -208,7 +208,8 @@ async fn main() -> Result<(), rocket::Error> {
         let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
         let progress_text = format!("Display progress bar (default {})", DEFAULT_PROGRESS);
         let ocl_text = format!("Use opencl instead of cpu (default {})", DEFAULT_OCL);
-        let service_text = format!("Run as a REST service (default {})", DEFAULT_OCL);
+        let vulkan_text = format!("Use vulkan instead of cpu (default {})", DEFAULT_VULKAN);
+        let service_text = format!("Run as a REST service (default {})", DEFAULT_SERVICE);
         let threads_text = format!(
             "Set number of threads to use for processing(default {})",
             DEFAULT_THREADS
@@ -263,7 +264,9 @@ async fn main() -> Result<(), rocket::Error> {
         parser
             .refer(&mut options.ocl)
             .add_option(&["--ocl"], StoreTrue, &ocl_text);
-
+        parser
+            .refer(&mut options.vulkan)
+            .add_option(&["--vulkan"], StoreTrue, &vulkan_text);
         parser
             .refer(&mut options.service)
             .add_option(&["--service"], StoreTrue, &service_text);
