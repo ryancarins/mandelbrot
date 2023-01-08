@@ -28,6 +28,7 @@ const DEFAULT_COLOUR_CODE: u32 = 7;
 const DEFAULT_COLOURISE: bool = false;
 const DEFAULT_PROGRESS: bool = false;
 const DEFAULT_OCL: bool = false;
+const DEFAULT_VULKAN: bool = true;
 const DEFAULT_SERVICE: bool = false;
 
 
@@ -61,6 +62,13 @@ fn generate(options: Options, out: &mut Vec<u32>) {
         );
         mandelbrot::opencl_mandelbrot(options, out).expect("Failed to generate image with opencl");
         println!("time taken: {}ms", start.elapsed().as_millis());
+        return;
+    } else if options.vulkan {
+
+        println!(
+            "Running vulkan version threads flag will be ignored and no progress bar can be shown"
+        );
+        mandelbrot::vulkan_mandelbrot(options, out);
         return;
     }
 
@@ -127,6 +135,7 @@ fn mandelbrot_rest(
         threads.unwrap_or(DEFAULT_THREADS),
         DEFAULT_PROGRESS,
         ocl.unwrap_or(DEFAULT_OCL),
+        DEFAULT_VULKAN,
         true,
     );
 
@@ -175,6 +184,7 @@ async fn main() -> Result<(), rocket::Error> {
         DEFAULT_THREADS,
         DEFAULT_PROGRESS,
         DEFAULT_OCL,
+        DEFAULT_VULKAN,
         DEFAULT_SERVICE,
     );
 

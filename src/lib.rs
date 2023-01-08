@@ -2,6 +2,22 @@ use ocl::ProQue;
 use std::fmt;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
+use bytemuck::{Pod, Zeroable};
+use vulkano::buffer::{CpuAccessibleBuffer,BufferUsage};
+use vulkano::VulkanLibrary;
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::instance::{Instance, InstanceCreateInfo};
+use vulkano::device::{Device, DeviceCreateInfo, QueueCreateInfo};
+use vulkano::memory::allocator::GenericMemoryAllocator;
+use vulkano::pipeline::ComputePipeline;
+use vulkano::pipeline::Pipeline;
+use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage};
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocatorCreateInfo;
+use vulkano::pipeline::PipelineBindPoint;
+use vulkano::sync::GpuFuture;
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
+use vulkano::memory::allocator::BumpAllocator;
 
 //Struct for storing arguments
 #[derive(Copy, Clone, Debug)]
@@ -22,7 +38,20 @@ pub struct Options {
     pub thread_id: Option<u32>,
     pub progress: bool,
     pub ocl: bool,
+    pub vulkan: bool,
     pub service: bool,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable, Default)]
+pub struct VulkanOpts {
+    pub width: u32,
+    pub height: u32,
+    pub samples: u32,
+    pub iterations: u32,
+    pub scaley: f32,
+    pub centrex: f32,
+    pub centrey: f32,
 }
 
 impl Options {
@@ -40,6 +69,7 @@ impl Options {
         threads: u32,
         progress: bool,
         ocl: bool,
+        vulkan: bool,
         service: bool,
     ) -> Options {
         Options {
@@ -57,7 +87,20 @@ impl Options {
             thread_id: None,
             progress,
             ocl,
+            vulkan,
             service,
+        }
+    }
+
+    pub fn as_vulkan_opts(&self) -> VulkanOpts {
+        VulkanOpts {
+            width: self.width,
+            height: self.height,
+            samples: self.samples,
+            iterations: self.max_iter,
+            scaley: self.scaley,
+            centrex: self.centrex,
+            centrey: self.centrey
         }
     }
 }
@@ -232,4 +275,207 @@ __kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, 
 
     //println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
     Ok(())
+}
+
+mod vulkan_mandelbrot {
+    vulkano_shaders::shader!{
+        ty: "compute",
+        src: "
+
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+uint MAX_COLOURS = 256;
+uint iterations2colour(uint iter, uint max_iter, uint flags)
+{
+    iter = (iter * MAX_COLOURS / max_iter) & (MAX_COLOURS - 1);
+
+    return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
+}
+
+layout(set = 0, binding = 0) buffer Data {
+    uint data[];
+} buf;
+
+layout(set = 1, binding = 0) buffer Opts {
+    uint width;
+    uint height;
+    uint samples;
+    uint iterations;
+    float scaley;
+    float centrex;
+    float centrey;
+} opts;
+
+void main() {
+    uint ix = gl_GlobalInvocationID.x;
+    uint iy = gl_GlobalInvocationID.y;
+    float scalex = opts.scaley * opts.width / opts.height;
+
+    float dx = scalex / opts.width / opts.samples;
+    float dy = opts.scaley / opts.height / opts.samples;
+
+    float startx = opts.centrex - scalex * 0.5f;
+    float starty = opts.centrey - opts.scaley * 0.5f;
+    int totalCalc = 0;
+ 
+    for (uint aay = 0; aay < opts.samples; aay++)
+    {
+        for (uint aax = 0; aax < opts.samples; aax++)
+        {
+            uint iter = 0;
+
+            float x0 = startx + (ix * opts.samples + aax) * dx;
+            float y0 = starty + (iy * opts.samples + aay) * dy;
+
+            float x = x0;
+            float y = y0;
+
+            while (x * x + y * y < (2 * 2) && iter <= opts.iterations)
+            {
+                float xtemp = x * x - y * y + x0;
+
+                y = 2 * x * y + y0;
+                x = xtemp;
+                iter += 1;
+            }
+
+            if (iter <= opts.iterations) totalCalc += int(iter);
+        }
+    }
+
+    buf.data[iy * opts.width + ix] = iterations2colour(totalCalc / (opts.samples * opts.samples), opts.iterations, 7);
+}
+"
+}
+}
+
+pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
+    let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
+    let instance = Instance::new(library, InstanceCreateInfo::default()).expect("failed to create instance");
+    let physical = instance
+        .enumerate_physical_devices()
+        .expect("could not enumerate devices")
+        .next()
+        .expect("no devices available");
+
+    let queue_family_index = physical
+        .queue_family_properties()
+        .iter()
+        .enumerate()
+        .position(|(_, q)| q.queue_flags.compute)
+        .expect("couldn't find a compute queue family") as u32;
+
+    let (device, mut queues) = Device::new(
+        physical,
+        DeviceCreateInfo {
+            queue_create_infos: vec![QueueCreateInfo {
+                queue_family_index,
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+    )
+        .expect("failed to create device");
+
+    let queue = queues.next().unwrap();
+
+    let data= 0..(options.width*options.height);
+
+    let allocator = GenericMemoryAllocator::<Arc<BumpAllocator>>::new_default(device.clone());
+    let data_buffer = CpuAccessibleBuffer::from_iter(
+        &allocator,
+        BufferUsage {
+            storage_buffer: true,
+            ..Default::default()
+        },
+        false,
+        data,
+    )
+        .unwrap();
+
+    let opts = options.as_vulkan_opts();
+    let opts_buffer = CpuAccessibleBuffer::from_data(
+        &allocator,
+        BufferUsage {
+            storage_buffer: true,
+            ..Default::default()
+        },
+        false,
+        opts,
+    )
+        .unwrap();
+
+
+    let shader = vulkan_mandelbrot::load(device.clone())
+        .expect("failed to create shader module");
+
+    let compute_pipeline = ComputePipeline::new(
+        device.clone(),
+        shader.entry_point("main").unwrap(),
+        &(),
+        None,
+        |_| {},
+    )
+        .expect("failed to create compute pipeline");
+
+    let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
+    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+    let data_set = PersistentDescriptorSet::new(
+        &descriptor_allocator,
+        layout.clone(),
+        [WriteDescriptorSet::buffer(0, data_buffer.clone())],
+    )
+        .unwrap();
+
+    let layout = compute_pipeline.layout().set_layouts().get(1).unwrap();
+    let opts_set = PersistentDescriptorSet::new(
+        &descriptor_allocator,
+        layout.clone(),
+        [WriteDescriptorSet::buffer(0, opts_buffer.clone())],
+    )
+        .unwrap();
+
+
+    let command_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), StandardCommandBufferAllocatorCreateInfo::default());
+
+    let mut builder = AutoCommandBufferBuilder::primary(
+        &command_buffer_allocator,
+        queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit,
+    )
+        .unwrap();
+
+    builder
+        .bind_pipeline_compute(compute_pipeline.clone())
+        .bind_descriptor_sets(
+            PipelineBindPoint::Compute,
+            compute_pipeline.layout().clone(),
+            0,
+            data_set,
+        )
+        .bind_descriptor_sets(
+            PipelineBindPoint::Compute,
+            compute_pipeline.layout().clone(),
+            1,
+            opts_set,
+        )
+        .dispatch([options.width/8, options.height/8, 1])
+        .unwrap();
+
+    let command_buffer = builder.build().unwrap();
+
+    let future = vulkano::sync::now(device.clone())
+    .then_execute(queue.clone(), command_buffer)
+    .unwrap()
+    .then_signal_fence_and_flush()
+    .unwrap();
+
+    future.wait(None).unwrap();
+
+    let content = data_buffer.read().unwrap();
+    for (i, val) in content.iter().enumerate() {
+        vec[i] = *val;
+    }
 }
