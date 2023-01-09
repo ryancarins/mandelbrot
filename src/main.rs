@@ -64,11 +64,11 @@ fn generate(options: Options, out: &mut Vec<u32>) {
         println!("time taken: {}ms", start.elapsed().as_millis());
         return;
     } else if options.vulkan {
-
         println!(
             "Running vulkan version threads flag will be ignored and no progress bar can be shown"
         );
         mandelbrot::vulkan_mandelbrot(options, out);
+        println!("time taken: {}ms", start.elapsed().as_millis());
         return;
     }
 
@@ -108,13 +108,14 @@ fn generate(options: Options, out: &mut Vec<u32>) {
     println!("time taken: {}ms", start.elapsed().as_millis());
 }
 
-#[get("/?<max_iter>&<width>&<height>&<threads>&<ocl>&<samples>&<scale>&<x>&<y>&<colourise>")]
+#[get("/?<max_iter>&<width>&<height>&<threads>&<ocl>&<samples>&<scale>&<x>&<y>&<colourise>&<vulkan>")]
 fn mandelbrot_rest(
     max_iter: Option<u32>,
     width: Option<u32>,
     height: Option<u32>,
     threads: Option<u32>,
     ocl: Option<bool>,
+    vulkan: Option<bool>,
     colourise: Option<bool>,
     samples: Option<u32>,
     scale: Option<f32>,
@@ -135,7 +136,7 @@ fn mandelbrot_rest(
         threads.unwrap_or(DEFAULT_THREADS),
         DEFAULT_PROGRESS,
         ocl.unwrap_or(DEFAULT_OCL),
-        DEFAULT_VULKAN,
+        vulkan.unwrap_or(DEFAULT_VULKAN),
         true,
     );
 
