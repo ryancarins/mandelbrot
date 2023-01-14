@@ -359,13 +359,14 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
         .expect("could not enumerate devices")
         .next()
         .expect("no devices available");
-
-    let queue_family_index = physical
+    
+    let mut queue_family_index = physical
         .queue_family_properties()
         .iter()
         .enumerate()
         .position(|(_, q)| q.queue_flags.compute)
         .expect("couldn't find a compute queue family") as u32;
+    
 
     let (device, mut queues) = Device::new(
         physical,
@@ -390,7 +391,7 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
             storage_buffer: true,
             ..Default::default()
         },
-        false,
+        true,
         data,
     )
         .unwrap();
