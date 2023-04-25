@@ -4,23 +4,37 @@ use argparse::{ArgumentParser, Store, StoreTrue};
 use image::{ImageBuffer, RgbImage};
 use mandelbrot::Options;
 use pbr::ProgressBar;
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
-use std::path::Path;
-use std::thread;
-use std::time::Instant;
-use rocket::fs::{FileServer, relative};
+use rocket::fairing::{Fairing, Info, Kind};
+use rocket::fs::{relative, FileServer};
 use rocket::http::Header;
 use rocket::{Request, Response};
-use rocket::fairing::{Fairing, Info, Kind};
+use std::path::Path;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Instant;
+use tracing::{span, Level};
+use tracing_flame::FlameLayer;
+use tracing_subscriber::{fmt, prelude::*, registry::Registry};
+
+fn setup_global_subscriber() -> impl Drop {
+    let fmt_layer = fmt::Layer::default();
+
+    let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+
+    let subscriber = Registry::default().with(fmt_layer).with(flame_layer);
+
+    tracing::subscriber::set_global_default(subscriber).expect("Could not set global default");
+    _guard
+}
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
 const DEFAULT_HEIGHT: u32 = 1024;
 const DEFAULT_MAX_ITER: u32 = 256;
-const DEFAULT_CENTREX: f32 = -0.75;
-const DEFAULT_CENTREY: f32 = 0.0;
-const DEFAULT_SCALEY: f32 = 2.5;
+const DEFAULT_CENTREX: f64 = -0.75;
+const DEFAULT_CENTREY: f64 = 0.0;
+const DEFAULT_SCALEY: f64 = 2.5;
 const DEFAULT_SAMPLES: u32 = 1;
 const DEFAULT_THREADS: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
@@ -31,7 +45,6 @@ const DEFAULT_OCL: bool = false;
 const DEFAULT_VULKAN: bool = false;
 const DEFAULT_SERVICE: bool = false;
 
-
 pub struct CORS;
 
 #[rocket::async_trait]
@@ -39,19 +52,24 @@ impl Fairing for CORS {
     fn info(&self) -> Info {
         Info {
             name: "Attaching CORS headers to responses",
-            kind: Kind::Response
+            kind: Kind::Response,
         }
     }
 
     async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
         response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
-        response.set_header(Header::new("Access-Control-Allow-Methods", "POST, GET, PATCH, OPTIONS"));
+        response.set_header(Header::new(
+            "Access-Control-Allow-Methods",
+            "POST, GET, PATCH, OPTIONS",
+        ));
         response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
         response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
     }
 }
 
 fn generate(options: Options, out: &mut Vec<u32>) {
+    let span = span!(Level::TRACE, "generate");
+    let _enter = span.enter();
     println!("{}", options);
     let start = Instant::now();
 
@@ -108,7 +126,9 @@ fn generate(options: Options, out: &mut Vec<u32>) {
     println!("time taken: {}ms", start.elapsed().as_millis());
 }
 
-#[get("/?<max_iter>&<width>&<height>&<threads>&<ocl>&<samples>&<scale>&<x>&<y>&<colourise>&<vulkan>")]
+#[get(
+    "/?<max_iter>&<width>&<height>&<threads>&<ocl>&<samples>&<scale>&<x>&<y>&<colourise>&<vulkan>"
+)]
 fn mandelbrot_rest(
     max_iter: Option<u32>,
     width: Option<u32>,
@@ -118,10 +138,12 @@ fn mandelbrot_rest(
     vulkan: Option<bool>,
     colourise: Option<bool>,
     samples: Option<u32>,
-    scale: Option<f32>,
-    x: Option<f32>,
-    y: Option<f32>
+    scale: Option<f64>,
+    x: Option<f64>,
+    y: Option<f64>,
 ) -> String {
+    let span = span!(Level::TRACE, "rest_query");
+    let _enter = span.enter();
     let options = Options::new(
         DEFAULT_MAX_COLOURS,
         max_iter.unwrap_or(DEFAULT_MAX_ITER),
@@ -140,8 +162,19 @@ fn mandelbrot_rest(
         true,
     );
 
-
-    let filename = format!("images/{}-{}-{}-{}-{}-{}-{}-{}-{}-{}.png",options.width,options.height,options.max_iter,options.max_colours, options.centrex, options.centrey,options.scaley,options.samples,options.colour,options.colourise);
+    let filename = format!(
+        "images/{}-{}-{}-{}-{}-{}-{}-{}-{}-{}.png",
+        options.width,
+        options.height,
+        options.max_iter,
+        options.max_colours,
+        options.centrex,
+        options.centrey,
+        options.scaley,
+        options.samples,
+        options.colour,
+        options.colourise
+    );
 
     if Path::new(&filename).exists() {
         return filename;
@@ -150,12 +183,15 @@ fn mandelbrot_rest(
     let mut buffer = vec![0; (options.width * options.height) as usize];
     generate(options, &mut buffer);
     let mut img: RgbImage = ImageBuffer::new(options.width, options.height);
+
+    let image_write_span = span!(Level::TRACE, "rest_query");
+    let _iws_enter = image_write_span.enter();
     for (x, y, pixel) in img.enumerate_pixels_mut() {
         //32 bit number but only storing rgb so split it into its 3 8 bit components
-        let b = ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16)
-            as u8;
-        let g = ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8)
-            as u8;
+        let b =
+            ((buffer[y as usize * options.width as usize + x as usize] & 0x00ff0000) >> 16) as u8;
+        let g =
+            ((buffer[y as usize * options.width as usize + x as usize] & 0x0000ff00) >> 8) as u8;
         let r = (buffer[y as usize * options.width as usize + x as usize] & 0x000000ff) as u8;
         *pixel = image::Rgb([r, g, b]);
     }
@@ -164,12 +200,15 @@ fn mandelbrot_rest(
         eprintln!("Error: Could not write file");
     });
 
-    return filename;
+    filename
 }
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     let mut filename = std::string::String::from(DEFAULT_FILENAME);
+    let _handle = setup_global_subscriber();
+    let span = span!(Level::TRACE, "main");
+    let _enter = span.enter();
 
     let mut options = Options::new(
         DEFAULT_MAX_COLOURS,
@@ -280,8 +319,12 @@ async fn main() -> Result<(), rocket::Error> {
         let _rocket = rocket::build()
             .attach(CORS)
             .mount("/", routes![mandelbrot_rest])
-            .mount("/images", FileServer::new(relative!("images"), file_options))
-            .launch().await?;
+            .mount(
+                "/images",
+                FileServer::new(relative!("images"), file_options),
+            )
+            .launch()
+            .await?;
     } else {
         let mut buffer = vec![0; (options.width * options.height) as usize];
 
@@ -303,5 +346,5 @@ async fn main() -> Result<(), rocket::Error> {
             eprintln!("Error: Could not write file");
         });
     }
-    return Ok(());
+    Ok(())
 }

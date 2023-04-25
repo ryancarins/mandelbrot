@@ -1,23 +1,26 @@
+use bytemuck::{Pod, Zeroable};
 use ocl::ProQue;
 use std::fmt;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use bytemuck::{Pod, Zeroable};
-use vulkano::buffer::{CpuAccessibleBuffer,BufferUsage};
-use vulkano::VulkanLibrary;
+use tracing::{span, Level};
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocatorCreateInfo;
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
+use vulkano::device::{Device, DeviceCreateInfo, Features, QueueCreateInfo, QueueFlags};
 use vulkano::instance::{Instance, InstanceCreateInfo};
-use vulkano::device::{Device, DeviceCreateInfo, QueueCreateInfo};
 use vulkano::memory::allocator::GenericMemoryAllocator;
+use vulkano::memory::allocator::{
+    AllocationCreateInfo, FreeListAllocator, MemoryAllocatePreference, MemoryUsage,
+};
 use vulkano::pipeline::ComputePipeline;
 use vulkano::pipeline::Pipeline;
-use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage};
-use vulkano::command_buffer::allocator::StandardCommandBufferAllocatorCreateInfo;
 use vulkano::pipeline::PipelineBindPoint;
 use vulkano::sync::GpuFuture;
-use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::memory::allocator::BumpAllocator;
+use vulkano::VulkanLibrary;
 
 //Struct for storing arguments
 #[derive(Copy, Clone, Debug)]
@@ -27,9 +30,9 @@ pub struct Options {
 
     pub width: u32,
     pub height: u32,
-    pub centrex: f32,
-    pub centrey: f32,
-    pub scaley: f32,
+    pub centrex: f64,
+    pub centrey: f64,
+    pub scaley: f64,
 
     pub samples: u32,
     pub colour: u32,
@@ -49,9 +52,9 @@ pub struct VulkanOpts {
     pub height: u32,
     pub samples: u32,
     pub iterations: u32,
-    pub scaley: f32,
-    pub centrex: f32,
-    pub centrey: f32,
+    pub scaley: f64,
+    pub centrex: f64,
+    pub centrey: f64,
 }
 
 impl Options {
@@ -60,9 +63,9 @@ impl Options {
         max_iter: u32,
         width: u32,
         height: u32,
-        centrex: f32,
-        centrey: f32,
-        scaley: f32,
+        centrex: f64,
+        centrey: f64,
+        scaley: f64,
         samples: u32,
         colour: u32,
         colourise: bool,
@@ -100,7 +103,7 @@ impl Options {
             iterations: self.max_iter,
             scaley: self.scaley,
             centrex: self.centrex,
-            centrey: self.centrey
+            centrey: self.centrey,
         }
     }
 }
@@ -125,8 +128,10 @@ impl fmt::Display for Options {
 
 #[inline(always)]
 fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) -> u32 {
+    let span = span!(Level::TRACE, "iterations2colour");
+    let _enter = span.enter();
     let iter = (iter * options.max_colours / max_iter) & (options.max_colours - 1);
-    return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
+    (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter
 }
 
 fn interlocked_increment(shared: Arc<Mutex<u32>>) -> u32 {
@@ -137,16 +142,17 @@ fn interlocked_increment(shared: Arc<Mutex<u32>>) -> u32 {
 }
 
 pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Arc<Mutex<u32>>) {
-    let scalex: f32 = options.scaley * options.width as f32 / options.height as f32;
-    let colour: u32;
-    if options.colourise {
-        colour = options.thread_id.unwrap() % 7 + 1;
+    let span = span!(Level::TRACE, "mandelbrot");
+    let _enter = span.enter();
+    let scalex: f64 = options.scaley * options.width as f64 / options.height as f64;
+    let colour = if options.colourise {
+        options.thread_id.unwrap() % 7 + 1
     } else {
-        colour = options.colour;
-    }
+        options.colour
+    };
 
-    let dx: f32 = scalex / options.width as f32 / options.samples as f32;
-    let dy: f32 = options.scaley / options.height as f32 / options.samples as f32;
+    let dx: f64 = scalex / options.width as f64 / options.samples as f64;
+    let dy: f64 = options.scaley / options.height as f64 / options.samples as f64;
 
     let startx = options.centrex - scalex * 0.5;
     let starty = options.centrey - options.scaley * 0.5;
@@ -160,15 +166,15 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
                 for iterx in 0..options.samples {
                     let mut iter: u32 = 0;
 
-                    let x0: f32 = startx + (ix as f32 * options.samples as f32 + iterx as f32) * dx;
-                    let y0: f32 = starty + (iy as f32 * options.samples as f32 + itery as f32) * dy;
-                    let mut x: f32 = x0;
-                    let mut y: f32 = y0;
-                    let mut xtemp: f32;
-                    while x * x + y * y < (2 * 2) as f32 && iter <= options.max_iter {
-                        xtemp = x * x - y * y + x0 as f32;
+                    let x0: f64 = startx + (ix as f64 * options.samples as f64 + iterx as f64) * dx;
+                    let y0: f64 = starty + (iy as f64 * options.samples as f64 + itery as f64) * dy;
+                    let mut x: f64 = x0;
+                    let mut y: f64 = y0;
+                    let mut xtemp: f64;
+                    while x * x + y * y < (2 * 2) as f64 && iter <= options.max_iter {
+                        xtemp = x * x - y * y + x0;
 
-                        y = 2.0 * x * y + y0 as f32;
+                        y = 2.0 * x * y + y0;
                         x = xtemp;
                         iter += 1;
                     }
@@ -196,58 +202,60 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
 }
 
 pub fn opencl_mandelbrot(options: Options, vec: &mut Vec<u32>) -> ocl::Result<()> {
+    let span = span!(Level::TRACE, "opencl");
+    let _enter = span.enter();
     let src = r#"#define MAX_COLOURS 256
 
 inline unsigned int iterations2colour(unsigned int iter, unsigned int max_iter, unsigned int flags)
 {
-	iter = (iter * MAX_COLOURS / max_iter) & (MAX_COLOURS - 1);
+    iter = (iter * MAX_COLOURS / max_iter) & (MAX_COLOURS - 1);
 
-	return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
+    return (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter;
 }
 
-__kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, float scaley, unsigned int samples, __global unsigned int* out)
+__kernel void mandelbrot(unsigned int iterations, double centrex, double centrey, double scaley, unsigned int samples, __global unsigned int* out)
 {
-	unsigned int width = get_global_size(1);
-	unsigned int height = get_global_size(0);
+    unsigned int width = get_global_size(1);
+    unsigned int height = get_global_size(0);
 
-	float scalex = scaley * width / height;
+    double scalex = scaley * width / height;
 
-	float dx = scalex / width / samples;
-	float dy = scaley / height / samples;
+    double dx = scalex / width / samples;
+    double dy = scaley / height / samples;
 
-	float startx = centrex - scalex * 0.5f;
-	float starty = centrey - scaley * 0.5f;
+    double startx = centrex - scalex * 0.5f;
+    double starty = centrey - scaley * 0.5f;
 
-	unsigned int ix = get_global_id(1);
-	unsigned int iy = get_global_id(0);
-	int totalCalc = 0;
+    unsigned int ix = get_global_id(1);
+    unsigned int iy = get_global_id(0);
+    int totalCalc = 0;
 
-	for (unsigned int aay = 0; aay < samples; aay++)
-	{
-		for (unsigned int aax = 0; aax < samples; aax++)
-		{
-			unsigned int iter = 0;
+    for (unsigned int aay = 0; aay < samples; aay++)
+    {
+        for (unsigned int aax = 0; aax < samples; aax++)
+        {
+            unsigned int iter = 0;
 
-			float x0 = startx + (ix * samples + aax) * dx;
-			float y0 = starty + (iy * samples + aay) * dy;
+            double x0 = startx + (ix * samples + aax) * dx;
+            double y0 = starty + (iy * samples + aay) * dy;
 
-			float x = x0;
-			float y = y0;
+            double x = x0;
+            double y = y0;
 
-			while (x * x + y * y < (2 * 2) && iter <= iterations)
-			{
-				float xtemp = x * x - y * y + x0;
+            while (x * x + y * y < (2 * 2) && iter <= iterations)
+            {
+                double xtemp = x * x - y * y + x0;
 
-				y = 2 * x * y + y0;
-				x = xtemp;
-				iter += 1;
-			}
+                y = 2 * x * y + y0;
+                x = xtemp;
+                iter += 1;
+            }
 
-			if (iter <= iterations) totalCalc += iter;
-		}
-	}
+            if (iter <= iterations) totalCalc += iter;
+        }
+    }
 
-	out[iy * width + ix] = iterations2colour(totalCalc / (samples * samples), iterations, 7);
+    out[iy * width + ix] = iterations2colour(totalCalc / (samples * samples), iterations, 7);
 }"#;
 
     let pro_que = ProQue::builder()
@@ -278,9 +286,9 @@ __kernel void mandelbrot(unsigned int iterations, float centrex, float centrey, 
 }
 
 mod vulkan_mandelbrot {
-    vulkano_shaders::shader!{
-        ty: "compute",
-        src: "
+    vulkano_shaders::shader! {
+            ty: "compute",
+            src: "
 
 #version 450
 
@@ -303,21 +311,21 @@ layout(set = 1, binding = 0) buffer Opts {
     uint height;
     uint samples;
     uint iterations;
-    float scaley;
-    float centrex;
-    float centrey;
+    double scaley;
+    double centrex;
+    double centrey;
 } opts;
 
 void main() {
     uint ix = gl_GlobalInvocationID.x;
     uint iy = gl_GlobalInvocationID.y;
-    float scalex = opts.scaley * opts.width / opts.height;
+    double scalex = opts.scaley * opts.width / opts.height;
 
-    float dx = scalex / opts.width / opts.samples;
-    float dy = opts.scaley / opts.height / opts.samples;
+    double dx = scalex / opts.width / opts.samples;
+    double dy = opts.scaley / opts.height / opts.samples;
 
-    float startx = opts.centrex - scalex * 0.5f;
-    float starty = opts.centrey - opts.scaley * 0.5f;
+    double startx = opts.centrex - scalex * 0.5f;
+    double starty = opts.centrey - opts.scaley * 0.5f;
     int totalCalc = 0;
  
     for (uint aay = 0; aay < opts.samples; aay++)
@@ -326,15 +334,15 @@ void main() {
         {
             uint iter = 0;
 
-            float x0 = startx + (ix * opts.samples + aax) * dx;
-            float y0 = starty + (iy * opts.samples + aay) * dy;
+            double x0 = startx + (ix * opts.samples + aax) * dx;
+            double y0 = starty + (iy * opts.samples + aay) * dy;
 
-            float x = x0;
-            float y = y0;
+            double x = x0;
+            double y = y0;
 
             while (x * x + y * y < (2 * 2) && iter <= opts.iterations)
             {
-                float xtemp = x * x - y * y + x0;
+                double xtemp = x * x - y * y + x0;
 
                 y = 2 * x * y + y0;
                 x = xtemp;
@@ -348,29 +356,68 @@ void main() {
     buf.data[iy * opts.width + ix] = iterations2colour(totalCalc / (opts.samples * opts.samples), opts.iterations, 7);
 }
 "
-}
+    }
 }
 
-pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
+pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
+    let span = span!(Level::TRACE, "vulkan");
+    let _enter = span.enter();
     let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
-    let instance = Instance::new(library, InstanceCreateInfo::default()).expect("failed to create instance");
+    let instance =
+        Instance::new(library, InstanceCreateInfo::default()).expect("failed to create instance");
     let physical = instance
         .enumerate_physical_devices()
         .expect("could not enumerate devices")
         .next()
         .expect("no devices available");
-    
-    let mut queue_family_index = physical
+
+    let valid_queues: Vec<(usize, &vulkano::device::QueueFamilyProperties)> = physical
         .queue_family_properties()
         .iter()
         .enumerate()
-        .position(|(_, q)| q.queue_flags.compute)
-        .expect("couldn't find a compute queue family") as u32;
-    
+        .filter(|x| {
+            x.1.queue_flags.contains(QueueFlags::COMPUTE)
+                && x.1.queue_flags.contains(QueueFlags::TRANSFER)
+        })
+        .collect();
+
+    let mut max_queue_count = 0;
+    let mut best_index = None;
+
+    for (idx, properties) in valid_queues {
+        if properties.queue_count > max_queue_count {
+            max_queue_count = properties.queue_count;
+            best_index = Some(idx);
+        }
+    }
+
+    if best_index.is_none() {
+        println!("GPU has no valid queues, exiting..");
+        return;
+    }
+    let queue_family_index = best_index.unwrap() as u32;
+
+    println!(
+        "{:?}",
+        physical.queue_family_properties()[best_index.unwrap()]
+    );
+
+    let f64_features = Features {
+        shader_float64: true,
+        ..Features::empty()
+    };
+
+    if physical.supported_features().contains(&f64_features) {
+        println!("Supports f64");
+    } else {
+        println!("GPU doesn't support f64 exiting");
+        return;
+    }
 
     let (device, mut queues) = Device::new(
         physical,
         DeviceCreateInfo {
+            enabled_features: f64_features,
             queue_create_infos: vec![QueueCreateInfo {
                 queue_family_index,
                 ..Default::default()
@@ -378,39 +425,45 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
             ..Default::default()
         },
     )
-        .expect("failed to create device");
+    .expect("failed to create device");
 
     let queue = queues.next().unwrap();
 
-    let data= 0..(options.width*options.height);
+    let data = 0..(options.width * options.height);
 
-    let allocator = GenericMemoryAllocator::<Arc<BumpAllocator>>::new_default(device.clone());
-    let data_buffer = CpuAccessibleBuffer::from_iter(
+    let allocator = GenericMemoryAllocator::<Arc<FreeListAllocator>>::new_default(device.clone());
+    let data_buffer = Buffer::from_iter(
         &allocator,
-        BufferUsage {
-            storage_buffer: true,
+        BufferCreateInfo {
+            usage: BufferUsage::STORAGE_BUFFER,
             ..Default::default()
         },
-        true,
+        AllocationCreateInfo {
+            usage: MemoryUsage::Download,
+            allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
+            ..Default::default()
+        },
         data,
     )
-        .unwrap();
+    .unwrap();
 
     let opts = options.as_vulkan_opts();
-    let opts_buffer = CpuAccessibleBuffer::from_data(
+    let opts_buffer = Buffer::from_data(
         &allocator,
-        BufferUsage {
-            storage_buffer: true,
+        BufferCreateInfo {
+            usage: BufferUsage::STORAGE_BUFFER,
             ..Default::default()
         },
-        false,
+        AllocationCreateInfo {
+            usage: MemoryUsage::Upload,
+            allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
+            ..Default::default()
+        },
         opts,
     )
-        .unwrap();
+    .unwrap();
 
-
-    let shader = vulkan_mandelbrot::load(device.clone())
-        .expect("failed to create shader module");
+    let shader = vulkan_mandelbrot::load(device.clone()).expect("failed to create shader module");
 
     let compute_pipeline = ComputePipeline::new(
         device.clone(),
@@ -419,7 +472,7 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
         None,
         |_| {},
     )
-        .expect("failed to create compute pipeline");
+    .expect("failed to create compute pipeline");
 
     let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
     let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
@@ -428,25 +481,27 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
         layout.clone(),
         [WriteDescriptorSet::buffer(0, data_buffer.clone())],
     )
-        .unwrap();
+    .unwrap();
 
     let layout = compute_pipeline.layout().set_layouts().get(1).unwrap();
     let opts_set = PersistentDescriptorSet::new(
         &descriptor_allocator,
         layout.clone(),
-        [WriteDescriptorSet::buffer(0, opts_buffer.clone())],
+        [WriteDescriptorSet::buffer(0, opts_buffer)],
     )
-        .unwrap();
+    .unwrap();
 
-
-    let command_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), StandardCommandBufferAllocatorCreateInfo::default());
+    let command_buffer_allocator = StandardCommandBufferAllocator::new(
+        device.clone(),
+        StandardCommandBufferAllocatorCreateInfo::default(),
+    );
 
     let mut builder = AutoCommandBufferBuilder::primary(
         &command_buffer_allocator,
         queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit,
     )
-        .unwrap();
+    .unwrap();
 
     builder
         .bind_pipeline_compute(compute_pipeline.clone())
@@ -462,16 +517,16 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut Vec<u32>) {
             1,
             opts_set,
         )
-        .dispatch([options.width/8, options.height/8, 1])
+        .dispatch([options.width / 8, options.height / 8, 1])
         .unwrap();
 
     let command_buffer = builder.build().unwrap();
 
-    let future = vulkano::sync::now(device.clone())
-    .then_execute(queue.clone(), command_buffer)
-    .unwrap()
-    .then_signal_fence_and_flush()
-    .unwrap();
+    let future = vulkano::sync::now(device)
+        .then_execute(queue, command_buffer)
+        .unwrap()
+        .then_signal_fence_and_flush()
+        .unwrap();
 
     future.wait(None).unwrap();
 
