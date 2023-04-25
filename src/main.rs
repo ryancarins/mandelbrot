@@ -14,22 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
-const DEFAULT_MAX_COLOURS: u32 = 256;
-const DEFAULT_WIDTH: u32 = 1024;
-const DEFAULT_HEIGHT: u32 = 1024;
-const DEFAULT_MAX_ITER: u32 = 256;
-const DEFAULT_CENTREX: f64 = -0.75;
-const DEFAULT_CENTREY: f64 = 0.0;
-const DEFAULT_SCALEY: f64 = 2.5;
-const DEFAULT_SAMPLES: u32 = 1;
-const DEFAULT_THREADS: u32 = 1;
 const DEFAULT_FILENAME: &str = "output.bmp";
-const DEFAULT_COLOUR_CODE: u32 = 7;
-const DEFAULT_COLOURISE: bool = false;
-const DEFAULT_PROGRESS: bool = false;
-const DEFAULT_OCL: bool = false;
-const DEFAULT_VULKAN: bool = false;
-const DEFAULT_SERVICE: bool = false;
 
 pub struct CORS;
 
@@ -126,23 +111,19 @@ fn mandelbrot_rest(
     x: Option<f64>,
     y: Option<f64>,
 ) -> String {
-    let options = Options::new(
-        DEFAULT_MAX_COLOURS,
-        max_iter.unwrap_or(DEFAULT_MAX_ITER),
-        width.unwrap_or(DEFAULT_WIDTH),
-        height.unwrap_or(DEFAULT_HEIGHT),
-        x.unwrap_or(DEFAULT_CENTREX),
-        y.unwrap_or(DEFAULT_CENTREY),
-        scale.unwrap_or(DEFAULT_SCALEY),
-        samples.unwrap_or(DEFAULT_SAMPLES),
-        DEFAULT_COLOUR_CODE,
-        colourise.unwrap_or(DEFAULT_COLOURISE),
-        threads.unwrap_or(DEFAULT_THREADS),
-        DEFAULT_PROGRESS,
-        ocl.unwrap_or(DEFAULT_OCL),
-        vulkan.unwrap_or(DEFAULT_VULKAN),
-        true,
-    );
+    let mut options = Options::default();
+    options.service = true;
+    options.max_iter = max_iter.unwrap_or(options.max_iter);
+    options.width = width.unwrap_or(options.width);
+    options.height = height.unwrap_or(options.height);
+    options.centrex = x.unwrap_or(options.centrex);
+    options.centrey = y.unwrap_or(options.centrey);
+    options.samples = samples.unwrap_or(options.samples);
+    options.colourise = colourise.unwrap_or(options.colourise);
+    options.threads = threads.unwrap_or(options.threads);
+    options.ocl = ocl.unwrap_or(options.ocl);
+    options.vulkan = vulkan.unwrap_or(options.vulkan);
+    options.scaley = scale.unwrap_or(options.scaley);
 
     let filename = format!(
         "images/{}-{}-{}-{}-{}-{}-{}-{}-{}-{}.png",
@@ -187,49 +168,33 @@ fn mandelbrot_rest(
 async fn main() -> Result<(), rocket::Error> {
     let mut filename = std::string::String::from(DEFAULT_FILENAME);
 
-    let mut options = Options::new(
-        DEFAULT_MAX_COLOURS,
-        DEFAULT_MAX_ITER,
-        DEFAULT_WIDTH,
-        DEFAULT_HEIGHT,
-        DEFAULT_CENTREX,
-        DEFAULT_CENTREY,
-        DEFAULT_SCALEY,
-        DEFAULT_SAMPLES,
-        DEFAULT_COLOUR_CODE,
-        DEFAULT_COLOURISE,
-        DEFAULT_THREADS,
-        DEFAULT_PROGRESS,
-        DEFAULT_OCL,
-        DEFAULT_VULKAN,
-        DEFAULT_SERVICE,
-    );
+    let mut options = Options::default();
 
     //Handle command line arguments
     {
         //Using variables here because I wanted to format and parser takes a &str
-        let height_text = format!("Set height (default {})", DEFAULT_HEIGHT);
-        let width_text = format!("Set width (default {})", DEFAULT_WIDTH);
-        let centrex_text = format!("Set centrex (default {})", DEFAULT_CENTREX);
-        let centrey_text = format!("Set centrey (default {})", DEFAULT_CENTREY);
+        let height_text = format!("Set height (default {})", options.height);
+        let width_text = format!("Set width (default {})", options.width);
+        let centrex_text = format!("Set centrex (default {})", options.centrex);
+        let centrey_text = format!("Set centrey (default {})", options.centrey);
         let colourise_text = format!(
             "Use a different colour for each thread (default {})",
-            DEFAULT_COLOURISE
+            options.colourise
         );
         let max_iter_text = format!(
             "Set maximum number of iterations (default {})",
-            DEFAULT_MAX_ITER
+            options.max_iter
         );
-        let scaley_text = format!("Set scale(default {})", DEFAULT_SCALEY);
-        let samples_text = format!("Set samples for supersampling(default {})", DEFAULT_SAMPLES);
-        let colour_text = format!("Set colour for image(default {})", DEFAULT_COLOUR_CODE);
-        let progress_text = format!("Display progress bar (default {})", DEFAULT_PROGRESS);
-        let ocl_text = format!("Use opencl instead of cpu (default {})", DEFAULT_OCL);
-        let vulkan_text = format!("Use vulkan instead of cpu (default {})", DEFAULT_VULKAN);
-        let service_text = format!("Run as a REST service (default {})", DEFAULT_SERVICE);
+        let scaley_text = format!("Set scale(default {})", options.scaley);
+        let samples_text = format!("Set samples for supersampling(default {})", options.samples);
+        let colour_text = format!("Set colour for image(default {})", options.colour);
+        let progress_text = format!("Display progress bar (default {})", options.progress);
+        let ocl_text = format!("Use opencl instead of cpu (default {})", options.ocl);
+        let vulkan_text = format!("Use vulkan instead of cpu (default {})", options.vulkan);
+        let service_text = format!("Run as a REST service (default {})", options.service);
         let threads_text = format!(
             "Set number of threads to use for processing(default {})",
-            DEFAULT_THREADS
+            options.threads
         );
         let filename_text = format!(
             "Set filename(default {}) supported formats are PNG, JPEG, BMP, and TIFF",

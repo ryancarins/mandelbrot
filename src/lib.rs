@@ -21,6 +21,22 @@ use vulkano::pipeline::PipelineBindPoint;
 use vulkano::sync::GpuFuture;
 use vulkano::VulkanLibrary;
 
+pub const DEFAULT_MAX_COLOURS: u32 = 256;
+pub const DEFAULT_WIDTH: u32 = 1024;
+pub const DEFAULT_HEIGHT: u32 = 1024;
+pub const DEFAULT_MAX_ITER: u32 = 256;
+pub const DEFAULT_CENTREX: f64 = -0.75;
+pub const DEFAULT_CENTREY: f64 = 0.0;
+pub const DEFAULT_SCALEY: f64 = 2.5;
+pub const DEFAULT_SAMPLES: u32 = 1;
+pub const DEFAULT_THREADS: u32 = 1;
+pub const DEFAULT_COLOUR_CODE: u32 = 7;
+pub const DEFAULT_COLOURISE: bool = false;
+pub const DEFAULT_PROGRESS: bool = false;
+pub const DEFAULT_OCL: bool = false;
+pub const DEFAULT_VULKAN: bool = false;
+pub const DEFAULT_SERVICE: bool = false;
+
 //Struct for storing arguments
 #[derive(Copy, Clone, Debug)]
 pub struct Options {
@@ -57,43 +73,6 @@ pub struct VulkanOpts {
 }
 
 impl Options {
-    pub fn new(
-        max_colours: u32,
-        max_iter: u32,
-        width: u32,
-        height: u32,
-        centrex: f64,
-        centrey: f64,
-        scaley: f64,
-        samples: u32,
-        colour: u32,
-        colourise: bool,
-        threads: u32,
-        progress: bool,
-        ocl: bool,
-        vulkan: bool,
-        service: bool,
-    ) -> Options {
-        Options {
-            max_colours,
-            max_iter,
-            width,
-            height,
-            centrex,
-            centrey,
-            scaley,
-            samples,
-            colour,
-            colourise,
-            threads,
-            thread_id: None,
-            progress,
-            ocl,
-            vulkan,
-            service,
-        }
-    }
-
     pub fn as_vulkan_opts(&self) -> VulkanOpts {
         VulkanOpts {
             width: self.width,
@@ -103,6 +82,29 @@ impl Options {
             scaley: self.scaley,
             centrex: self.centrex,
             centrey: self.centrey,
+        }
+    }
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            max_colours: DEFAULT_MAX_COLOURS,
+            max_iter: DEFAULT_MAX_ITER,
+            width: DEFAULT_WIDTH,
+            height: DEFAULT_HEIGHT,
+            centrex: DEFAULT_CENTREX,
+            centrey: DEFAULT_CENTREY,
+            scaley: DEFAULT_SCALEY,
+            samples: DEFAULT_SAMPLES,
+            colour: DEFAULT_COLOUR_CODE,
+            colourise: DEFAULT_COLOURISE,
+            threads: DEFAULT_THREADS,
+            progress: DEFAULT_PROGRESS,
+            ocl: DEFAULT_OCL,
+            vulkan: DEFAULT_VULKAN,
+            service: DEFAULT_SERVICE,
+            thread_id: None,
         }
     }
 }
@@ -353,6 +355,10 @@ void main() {
 }
 
 pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
+    if options.width % 1024 != 0 || options.height % 1024 != 0 {
+        println!("Cannot run vulkan with width/height not divisible by 1024");
+        return;
+    }
     let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
     let instance =
         Instance::new(library, InstanceCreateInfo::default()).expect("failed to create instance");
