@@ -13,20 +13,6 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-use tracing::{span, Level};
-use tracing_flame::FlameLayer;
-use tracing_subscriber::{fmt, prelude::*, registry::Registry};
-
-fn setup_global_subscriber() -> impl Drop {
-    let fmt_layer = fmt::Layer::default();
-
-    let (flame_layer, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
-
-    let subscriber = Registry::default().with(fmt_layer).with(flame_layer);
-
-    tracing::subscriber::set_global_default(subscriber).expect("Could not set global default");
-    _guard
-}
 
 const DEFAULT_MAX_COLOURS: u32 = 256;
 const DEFAULT_WIDTH: u32 = 1024;
@@ -68,8 +54,6 @@ impl Fairing for CORS {
 }
 
 fn generate(options: Options, out: &mut Vec<u32>) {
-    let span = span!(Level::TRACE, "generate");
-    let _enter = span.enter();
     println!("{}", options);
     let start = Instant::now();
 
@@ -142,8 +126,6 @@ fn mandelbrot_rest(
     x: Option<f64>,
     y: Option<f64>,
 ) -> String {
-    let span = span!(Level::TRACE, "rest_query");
-    let _enter = span.enter();
     let options = Options::new(
         DEFAULT_MAX_COLOURS,
         max_iter.unwrap_or(DEFAULT_MAX_ITER),
@@ -184,8 +166,6 @@ fn mandelbrot_rest(
     generate(options, &mut buffer);
     let mut img: RgbImage = ImageBuffer::new(options.width, options.height);
 
-    let image_write_span = span!(Level::TRACE, "rest_query");
-    let _iws_enter = image_write_span.enter();
     for (x, y, pixel) in img.enumerate_pixels_mut() {
         //32 bit number but only storing rgb so split it into its 3 8 bit components
         let b =
@@ -206,9 +186,6 @@ fn mandelbrot_rest(
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     let mut filename = std::string::String::from(DEFAULT_FILENAME);
-    let _handle = setup_global_subscriber();
-    let span = span!(Level::TRACE, "main");
-    let _enter = span.enter();
 
     let mut options = Options::new(
         DEFAULT_MAX_COLOURS,

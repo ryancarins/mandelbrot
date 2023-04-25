@@ -3,7 +3,6 @@ use ocl::ProQue;
 use std::fmt;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use tracing::{span, Level};
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocatorCreateInfo;
@@ -128,8 +127,6 @@ impl fmt::Display for Options {
 
 #[inline(always)]
 fn iterations2colour(options: &Options, iter: u32, max_iter: u32, flags: u32) -> u32 {
-    let span = span!(Level::TRACE, "iterations2colour");
-    let _enter = span.enter();
     let iter = (iter * options.max_colours / max_iter) & (options.max_colours - 1);
     (((flags & 4) << 14) | ((flags & 2) << 7) | (flags & 1)) * iter
 }
@@ -142,8 +139,6 @@ fn interlocked_increment(shared: Arc<Mutex<u32>>) -> u32 {
 }
 
 pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Arc<Mutex<u32>>) {
-    let span = span!(Level::TRACE, "mandelbrot");
-    let _enter = span.enter();
     let scalex: f64 = options.scaley * options.width as f64 / options.height as f64;
     let colour = if options.colourise {
         options.thread_id.unwrap() % 7 + 1
@@ -202,8 +197,6 @@ pub fn mandelbrot(options: Options, sender: Sender<(u32, u32)>, current_line: Ar
 }
 
 pub fn opencl_mandelbrot(options: Options, vec: &mut Vec<u32>) -> ocl::Result<()> {
-    let span = span!(Level::TRACE, "opencl");
-    let _enter = span.enter();
     let src = r#"#define MAX_COLOURS 256
 
 inline unsigned int iterations2colour(unsigned int iter, unsigned int max_iter, unsigned int flags)
@@ -360,8 +353,6 @@ void main() {
 }
 
 pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
-    let span = span!(Level::TRACE, "vulkan");
-    let _enter = span.enter();
     let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
     let instance =
         Instance::new(library, InstanceCreateInfo::default()).expect("failed to create instance");
