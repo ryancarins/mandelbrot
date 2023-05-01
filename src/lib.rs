@@ -35,6 +35,7 @@ pub const DEFAULT_COLOURISE: bool = false;
 pub const DEFAULT_PROGRESS: bool = false;
 pub const DEFAULT_OCL: bool = false;
 pub const DEFAULT_VULKAN: bool = false;
+pub const DEFAULT_VULKAN_CHUNKS: u32 = 1;
 pub const DEFAULT_SERVICE: bool = false;
 
 //Struct for storing arguments
@@ -57,6 +58,7 @@ pub struct Options {
     pub progress: bool,
     pub ocl: bool,
     pub vulkan: bool,
+    pub vulkan_chunks: u32,
     pub service: bool,
 }
 
@@ -68,7 +70,7 @@ pub struct VulkanOpts {
     pub samples: u32,
     pub iterations: u32,
     pub yoffset: u32,
-    _manualoffset: u32,
+    pub chunks: u32,
     pub scaley: f64,
     pub centrex: f64,
     pub centrey: f64,
@@ -82,7 +84,7 @@ impl Options {
             samples: self.samples,
             iterations: self.max_iter,
             yoffset: 0,
-            _manualoffset: 0,
+            chunks: self.vulkan_chunks,
             scaley: self.scaley,
             centrex: self.centrex,
             centrey: self.centrey,
@@ -107,6 +109,7 @@ impl Default for Options {
             progress: DEFAULT_PROGRESS,
             ocl: DEFAULT_OCL,
             vulkan: DEFAULT_VULKAN,
+            vulkan_chunks: DEFAULT_VULKAN_CHUNKS,
             service: DEFAULT_SERVICE,
             thread_id: None,
         }
@@ -361,8 +364,11 @@ void main() {
 }
 
 pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
-    if options.width % 8 != 0 || options.height % 8 != 0 {
-        println!("Cannot run vulkan with height not divisible by 8");
+    if options.height % options.vulkan_chunks != 0 {
+        println!(
+            "Cannot run vulkan with height not divisible by chunks ({})",
+            options.vulkan_chunks
+        );
         return;
     }
     let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
@@ -400,11 +406,6 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
     }
     let queue_family_index = best_index.unwrap() as u32;
 
-    println!(
-        "{:?}",
-        physical.queue_family_properties()[best_index.unwrap()]
-    );
-
     let f64_features = Features {
         shader_float64: true,
         ..Features::empty()
@@ -432,7 +433,7 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
 
     let queue = queues.next().unwrap();
 
-    let data = 0..(options.width * options.height / 8);
+    let data = 0..(options.width * options.height / options.vulkan_chunks);
 
     let allocator = GenericMemoryAllocator::<Arc<FreeListAllocator>>::new_default(device.clone());
     let data_buffer = Buffer::from_iter(
@@ -450,9 +451,9 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
     )
     .unwrap();
 
-    for chunk in 0..8 {
+    for chunk in 0..options.vulkan_chunks {
         let mut opts = options.as_vulkan_opts();
-        opts.yoffset = options.height / 8 * chunk;
+        opts.yoffset = options.height / options.vulkan_chunks * chunk;
         let opts_buffer = Buffer::from_data(
             &allocator,
             BufferCreateInfo {
@@ -523,7 +524,11 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
                 1,
                 opts_set,
             )
-            .dispatch([options.width / 8, options.height / 8 / 8, 1])
+            .dispatch([
+                options.width / 8,
+                options.height / 8 / options.vulkan_chunks,
+                1,
+            ])
             .unwrap();
 
         let command_buffer = builder.build().unwrap();

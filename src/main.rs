@@ -191,6 +191,10 @@ async fn main() -> Result<(), rocket::Error> {
         let progress_text = format!("Display progress bar (default {})", options.progress);
         let ocl_text = format!("Use opencl instead of cpu (default {})", options.ocl);
         let vulkan_text = format!("Use vulkan instead of cpu (default {})", options.vulkan);
+        let vulkan_chunks_text = format!(
+            "Split vulkan compute shader into chunks (default {})",
+            options.vulkan_chunks
+        );
         let service_text = format!("Run as a REST service (default {})", options.service);
         let threads_text = format!(
             "Set number of threads to use for processing(default {})",
@@ -226,6 +230,11 @@ async fn main() -> Result<(), rocket::Error> {
         parser
             .refer(&mut options.samples)
             .add_option(&["--samples"], Store, &samples_text);
+        parser.refer(&mut options.vulkan_chunks).add_option(
+            &["--vchunks"],
+            Store,
+            &vulkan_chunks_text,
+        );
         parser
             .refer(&mut options.colour)
             .add_option(&["--colour"], Store, &colour_text);
