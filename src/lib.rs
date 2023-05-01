@@ -67,6 +67,8 @@ pub struct VulkanOpts {
     pub height: u32,
     pub samples: u32,
     pub iterations: u32,
+    pub yoffset: u32,
+    _manualoffset: u32,
     pub scaley: f64,
     pub centrex: f64,
     pub centrey: f64,
@@ -79,6 +81,8 @@ impl Options {
             height: self.height,
             samples: self.samples,
             iterations: self.max_iter,
+            yoffset: 0,
+            _manualoffset: 0,
             scaley: self.scaley,
             centrex: self.centrex,
             centrey: self.centrey,
@@ -306,6 +310,8 @@ layout(set = 1, binding = 0) buffer Opts {
     uint height;
     uint samples;
     uint iterations;
+    uint yoffset;
+    uint _manualOffset;
     double scaley;
     double centrex;
     double centrey;
@@ -313,7 +319,7 @@ layout(set = 1, binding = 0) buffer Opts {
 
 void main() {
     uint ix = gl_GlobalInvocationID.x;
-    uint iy = gl_GlobalInvocationID.y;
+    uint iy = gl_GlobalInvocationID.y + opts.yoffset;
     double scalex = opts.scaley * opts.width / opts.height;
 
     double dx = scalex / opts.width / opts.samples;
@@ -348,15 +354,15 @@ void main() {
         }
     }
 
-    buf.data[iy * opts.width + ix] = iterations2colour(totalCalc / (opts.samples * opts.samples), opts.iterations, 7);
+    buf.data[(iy - (opts.yoffset)) * opts.width + ix] = iterations2colour(totalCalc / (opts.samples * opts.samples), opts.iterations, 7);
 }
 "
     }
 }
 
 pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
-    if options.width % 1024 != 0 || options.height % 1024 != 0 {
-        println!("Cannot run vulkan with width/height not divisible by 1024");
+    if options.width % 8 != 0 || options.height % 8 != 0 {
+        println!("Cannot run vulkan with height not divisible by 8");
         return;
     }
     let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
@@ -426,7 +432,7 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
 
     let queue = queues.next().unwrap();
 
-    let data = 0..(options.width * options.height);
+    let data = 0..(options.width * options.height / 8);
 
     let allocator = GenericMemoryAllocator::<Arc<FreeListAllocator>>::new_default(device.clone());
     let data_buffer = Buffer::from_iter(
@@ -444,91 +450,95 @@ pub fn vulkan_mandelbrot(options: Options, vec: &mut [u32]) {
     )
     .unwrap();
 
-    let opts = options.as_vulkan_opts();
-    let opts_buffer = Buffer::from_data(
-        &allocator,
-        BufferCreateInfo {
-            usage: BufferUsage::STORAGE_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            usage: MemoryUsage::Upload,
-            allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
-            ..Default::default()
-        },
-        opts,
-    )
-    .unwrap();
-
-    let shader = vulkan_mandelbrot::load(device.clone()).expect("failed to create shader module");
-
-    let compute_pipeline = ComputePipeline::new(
-        device.clone(),
-        shader.entry_point("main").unwrap(),
-        &(),
-        None,
-        |_| {},
-    )
-    .expect("failed to create compute pipeline");
-
-    let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
-    let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
-    let data_set = PersistentDescriptorSet::new(
-        &descriptor_allocator,
-        layout.clone(),
-        [WriteDescriptorSet::buffer(0, data_buffer.clone())],
-    )
-    .unwrap();
-
-    let layout = compute_pipeline.layout().set_layouts().get(1).unwrap();
-    let opts_set = PersistentDescriptorSet::new(
-        &descriptor_allocator,
-        layout.clone(),
-        [WriteDescriptorSet::buffer(0, opts_buffer)],
-    )
-    .unwrap();
-
-    let command_buffer_allocator = StandardCommandBufferAllocator::new(
-        device.clone(),
-        StandardCommandBufferAllocatorCreateInfo::default(),
-    );
-
-    let mut builder = AutoCommandBufferBuilder::primary(
-        &command_buffer_allocator,
-        queue.queue_family_index(),
-        CommandBufferUsage::OneTimeSubmit,
-    )
-    .unwrap();
-
-    builder
-        .bind_pipeline_compute(compute_pipeline.clone())
-        .bind_descriptor_sets(
-            PipelineBindPoint::Compute,
-            compute_pipeline.layout().clone(),
-            0,
-            data_set,
+    for chunk in 0..8 {
+        let mut opts = options.as_vulkan_opts();
+        opts.yoffset = options.height / 8 * chunk;
+        let opts_buffer = Buffer::from_data(
+            &allocator,
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                usage: MemoryUsage::Upload,
+                allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
+                ..Default::default()
+            },
+            opts,
         )
-        .bind_descriptor_sets(
-            PipelineBindPoint::Compute,
-            compute_pipeline.layout().clone(),
-            1,
-            opts_set,
-        )
-        .dispatch([options.width / 8, options.height / 8, 1])
         .unwrap();
 
-    let command_buffer = builder.build().unwrap();
+        let shader =
+            vulkan_mandelbrot::load(device.clone()).expect("failed to create shader module");
 
-    let future = vulkano::sync::now(device)
-        .then_execute(queue, command_buffer)
-        .unwrap()
-        .then_signal_fence_and_flush()
+        let compute_pipeline = ComputePipeline::new(
+            device.clone(),
+            shader.entry_point("main").unwrap(),
+            &(),
+            None,
+            |_| {},
+        )
+        .expect("failed to create compute pipeline");
+
+        let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
+        let layout = compute_pipeline.layout().set_layouts().get(0).unwrap();
+        let data_set = PersistentDescriptorSet::new(
+            &descriptor_allocator,
+            layout.clone(),
+            [WriteDescriptorSet::buffer(0, data_buffer.clone())],
+        )
         .unwrap();
 
-    future.wait(None).unwrap();
+        let layout = compute_pipeline.layout().set_layouts().get(1).unwrap();
+        let opts_set = PersistentDescriptorSet::new(
+            &descriptor_allocator,
+            layout.clone(),
+            [WriteDescriptorSet::buffer(0, opts_buffer)],
+        )
+        .unwrap();
 
-    let content = data_buffer.read().unwrap();
-    for (i, val) in content.iter().enumerate() {
-        vec[i] = *val;
+        let command_buffer_allocator = StandardCommandBufferAllocator::new(
+            device.clone(),
+            StandardCommandBufferAllocatorCreateInfo::default(),
+        );
+
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &command_buffer_allocator,
+            queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(compute_pipeline.clone())
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                compute_pipeline.layout().clone(),
+                0,
+                data_set,
+            )
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                compute_pipeline.layout().clone(),
+                1,
+                opts_set,
+            )
+            .dispatch([options.width / 8, options.height / 8 / 8, 1])
+            .unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        let future = vulkano::sync::now(device.clone())
+            .then_execute(queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        let content = data_buffer.read().unwrap();
+        for (i, val) in content.iter().enumerate() {
+            vec[i + (opts.yoffset as usize * opts.width as usize)] = *val;
+        }
     }
 }
